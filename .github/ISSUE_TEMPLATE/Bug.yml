@@ -1,0 +1,22 @@
+name: '🐞Bug'
+description: '버그 관련 작업'
+labels: ['bug']
+body:
+  - type: textarea
+    attributes:
+      label: 🧨 버그 설명
+      description: 어떤 문제가 발생했나요?
+      placeholder: 발생한 버그에 대해 자세히 설명해주세요.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: ✅ 수정할 내용
+      description: 어떤 작업이 필요하다고 생각하시나요?
+      placeholder: 예상되는 수정 사항이나 해결 방향을 적어주세요.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: 🔎 기타
+      description: 스크린샷, 참고 링크 등 추가 자료가 있다면 작성해주세요.
