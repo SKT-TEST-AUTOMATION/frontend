@@ -1,0 +1,16 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root { height: 100%; }
+
+@keyframes toastIn {
+  0%   { opacity: 0; transform: translateY(-8px) scale(0.98); }
+  100% { opacity: 1; transform: translateY(0)     scale(1); }
+}
+@keyframes toastOut {
+  0%   { opacity: 1; transform: translateY(0)     scale(1); }
+  100% { opacity: 0; transform: translateY(-6px)  scale(0.98); }
+}
+.animate-toastIn  { animation: toastIn .22s ease-out both; }
+.animate-toastOut { animation: toastOut .20s ease-in  both; }

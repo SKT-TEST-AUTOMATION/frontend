@@ -1,12 +1,11 @@
-import './App.css'
+import AppShell from './layout/AppShell';
 
 function App() {
+  const user = { name : '테스터', avatarUrl: ''};
+
   return (
-    <>
-      <div>
-        Hello, world!
-      </div>
-    </>
+    <AppShell user={user}>
+    </AppShell>
   )
 }
 
