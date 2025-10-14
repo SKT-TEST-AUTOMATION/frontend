@@ -44,7 +44,7 @@ export default function Toast({ toast, onClose, autoHideMs = 2500 }) {
         role="status"
         aria-live="polite"
         className={[
-          "pointer-events-auto max-w-md w-full",
+          "pointer-events-auto max-w-md w-full toast-motion",
           "rounded-2xl border px-4 py-3 shadow-2xl",
           "backdrop-blur-lg bg-white/60",
           s.classes,
