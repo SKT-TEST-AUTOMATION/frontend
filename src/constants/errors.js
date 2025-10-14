@@ -1,0 +1,1 @@
+export const REQUEST_CANCELED_CODE = "ERR_CANCELED";
