@@ -19,7 +19,7 @@ export default function ToastPortal({ autoHideMs = 2500 }) {
     setLeaving(false);
 
     const t1 = setTimeout(() => setLeaving(true), autoHideMs);
-    const t2 = setTimeout(() => setToast(null), autoHideMs + 300);
+    const t2 = setTimeout(() => setToast(null), autoHideMs + 260);
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [toast, autoHideMs, setToast]);
 
@@ -28,7 +28,7 @@ export default function ToastPortal({ autoHideMs = 2500 }) {
 
   const close = () => {
     setLeaving(true);
-    setTimeout(() => setToast(null), 220);
+    setTimeout(() => setToast(null), 240);
   };
 
   return (
@@ -37,9 +37,9 @@ export default function ToastPortal({ autoHideMs = 2500 }) {
         role="status" aria-live="polite"
         className={[
           "pointer-events-auto max-w-md w-full rounded-2xl border px-4 py-3 shadow-2xl",
-          "backdrop-blur-lg bg-white/60",
+          "backdrop-blur-lg bg-white/60 toast-motion",
           sty.classes,
-          leaving ? "animate-toastOutCute" : "animate-toastInCute",
+          leaving ? "animate-toastOut" : "animate-toastIn",
         ].join(" ")}
       >
         <div className="flex items-center justify-center gap-2 text-center">

@@ -4,13 +4,40 @@
 
 html, body, #root { height: 100%; }
 
-@keyframes toastIn {
-  0%   { opacity: 0; transform: translateY(-8px) scale(0.98); }
-  100% { opacity: 1; transform: translateY(0)     scale(1); }
+:root{
+  --toast-in-dur: 320ms;    /* 등장 시간 */
+  --toast-out-dur: 240ms;   /* 퇴장 시간 */
+  --ease-soft-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-soft-in:  cubic-bezier(0.4, 0, 1, 1);
 }
-@keyframes toastOut {
+
+.toast-motion{
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
+
+/* ===== Keyframes ===== */
+@keyframes toastIn{
+  0%   { opacity: 0; transform: translateY(-10px) scale(0.97); }
+  60%  { opacity: 1; transform: translateY(  2px) scale(1.005); }
+  100% { opacity: 1; transform: translateY(  0 )  scale(1); }
+}
+@keyframes toastOut{
   0%   { opacity: 1; transform: translateY(0)     scale(1); }
   100% { opacity: 0; transform: translateY(-6px)  scale(0.98); }
 }
-.animate-toastIn  { animation: toastIn .22s ease-out both; }
-.animate-toastOut { animation: toastOut .20s ease-in  both; }
+
+/* ===== Utilities ===== */
+.animate-toastIn{
+  animation: toastIn var(--toast-in-dur) var(--ease-soft-out) both;
+}
+.animate-toastOut{
+  animation: toastOut var(--toast-out-dur) var(--ease-soft-in)  both;
+}
+
+/* 모션 민감 사용자 */
+@media (prefers-reduced-motion: reduce){
+  .animate-toastIn,
+  .animate-toastOut{ animation: none !important; }
+}
