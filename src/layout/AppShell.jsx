@@ -26,6 +26,10 @@ export default function AppShell({ children, user }) {
         { label: '이슈 관리', href: '/runs/issues' },
         { label: '결과 보고서', href: '/runs/reports' },
       ],
+      registry : [
+        { label: '테스트 레지스트리', href: '/registry' },
+        { label: '단말 관리', href: '/registry/devices' },
+      ],
       singles: [
         { label: '테스트 결과 관리', href: '/runs/results' },
         { label: '테스트 레지스트리', href: '/registry' },
