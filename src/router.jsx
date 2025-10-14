@@ -7,6 +7,10 @@ import TestResultListPage from './features/testresult/pages/TestResultListPage';
 import TestCaseCreatePage from './features/testcase/pages/TestCaseCreatePage';
 import TestCaseDetailPage from './features/testcase/pages/TestCaseDetailPage';
 import TestCaseListPage from './features/testcase/pages/TestCaseListPage';
+import ScenarioCreatePage from './features/scenario/pages/ScenarioCreatePage';
+import NotFoundPage from './NotFoundPage';
+import DeviceFarmPage from './features/device-farm/DeviceFarmPage';
+import ScenarioTestListPage from './features/runs/pages/ScenarioTestListPage';
 
 export const router = createBrowserRouter([
   {
@@ -25,11 +29,19 @@ export const router = createBrowserRouter([
       { path: 'scenarios',
         children: [
           { index: true, element: <ScenarioListPage /> },
-          { path: ':scenarioId/detail', element: <ScenarioDetailPage /> }
+          { path: ':scenarioId/detail', element: <ScenarioDetailPage /> },
+          { path: 'new', element: <ScenarioCreatePage /> }
         ]
       },
-      { path: 'runs/results', element: <TestResultListPage /> },
-      { path: '*', element: <div className="p-6">404 Not Found</div> },
+      {
+        path: 'runs',
+        children: [
+          { index: true, element: <ScenarioTestListPage /> },
+        ]
+      },
+      { path: '/results', element: <TestResultListPage /> },
+      { path: 'registry/devices', element: <DeviceFarmPage /> },
+      { path: '*', element: <NotFoundPage /> },
     ],
   },
 ]);
