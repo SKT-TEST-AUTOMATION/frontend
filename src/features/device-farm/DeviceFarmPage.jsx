@@ -6,7 +6,7 @@ import PageHeader from "../../shared/components/PageHeader";
 import { deviceFarmState } from "./state/deviceFarmState";
 import { useDeviceFarmPolling } from "./hooks/useDeviceFarm";
 import { api, normalizePage, toErrorMessage } from "../../services/axios";
-import { getDevices } from "../../services/deviceAPI";
+import { createDevice, getDevices } from "../../services/deviceAPI";
 import { REQUEST_CANCELED_CODE } from "../../constants/errors";
 
 // ──────────────────────────────────────────────────────────
@@ -73,14 +73,13 @@ function RegisterModal({ open, onClose, initial, onSaved }) {
     setSaving(true);
     setError(null);
     try {
-      await api.post("/api/v1/devices", {
+      await createDevice({
         udid: initial.udid,
         name: name?.trim() || initial.udid,
-        platform: (initial.platform || "").toUpperCase() === "IOS" ? "IOS" : "ANDROID",
+        deviceOsType: (initial.platform || "").toUpperCase() === "IOS" ? "IOS" : "ANDROID",
         systemPort: initial.systemPort ?? null,
         appiumPort: initial.appiumPort ?? 4723,
-        connectedIp: initial.connectedIp ?? initial.appiumHost ?? "127.0.0.1",
-        basePath: initial.basePath ?? "",
+        connectedIp: initial.connectedIp ?? initial.connectedUrl ?? initial.appiumHost ?? "127.0.0.1",
       });
       onSaved?.();
       onClose?.();
