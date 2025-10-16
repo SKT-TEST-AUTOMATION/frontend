@@ -9,3 +9,9 @@ export async function getDevices(params = {}, signal) {
   });
   return res;
 }
+
+// 디바이스 등록
+export async function createDevice(payload) {
+  const res = await api.post('devices', payload);
+  return res?.data?.data ?? res?.data;
+}

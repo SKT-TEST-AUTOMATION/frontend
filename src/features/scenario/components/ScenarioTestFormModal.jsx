@@ -25,8 +25,8 @@ export default function ScenarioTestFormModal({ scenarioId, onSuccess, onError }
     code: "",
     testName: "",
     appPlatformType: "MOBILE_APP",
-    testAppId: 1, // t 멤버십
-    deviceUdid: "",   
+    testAppId: "1", // t 멤버십
+    deviceOsType: "ANDROID",   
     userId: "",
   });
 
@@ -36,7 +36,7 @@ export default function ScenarioTestFormModal({ scenarioId, onSuccess, onError }
   };
 
   const validate = () => {
-    const required = ["code", "testName", "appPlatformType", "testAppId", "deviceUdid", "userId"]; 
+    const required = ["code", "testName", "appPlatformType", "testAppId", "deviceOsType", "userId"]; 
     return required.every((k) => String(form[k]).trim().length > 0);
   };
 
@@ -53,7 +53,7 @@ export default function ScenarioTestFormModal({ scenarioId, onSuccess, onError }
       testName: form.testName.trim(),
       appPlatformType: form.appPlatformType,
       testAppId: Number(form.testAppId),
-      deviceUdid: form.deviceUdid.trim(), 
+      deviceOsType: form.deviceOsType.trim(), 
     };
 
     setSubmitting(true);
