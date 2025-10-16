@@ -1,10 +1,13 @@
 // src/features/testcases/pages/TestCaseCreatePage.jsx
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api } from "../../../services/axios";
 import PageHeader from "../../../shared/components/PageHeader";
 import { useToast } from "../../../shared/hooks/useToast";
 import TestCaseForm from "../components/TestCaseForm";
+import { createTestcase } from "../../../services/testcaseAPI";
+import { REQUEST_CANCELED_CODE } from "../../../constants/errors";
+import { toErrorMessage } from "../../../services/axios";
+import { setErrorMap } from "zod/v3";
 
 const CREATE_ENDPOINT = "/testcases?userId=1"; // CreateTestCaseDto.Request
 const DRAFT_KEY = "testcase:new:draft";
@@ -12,7 +15,8 @@ const DRAFT_KEY = "testcase:new:draft";
 export default function TestCaseCreatePage() {
   const navigate = useNavigate();
   const { showToast } = useToast();
-
+  const [error, setError] = useState(null);
+  
   // DTO에 맞춘 폼 상태
   const [form, setForm] = useState({
     code: "",
@@ -88,19 +92,17 @@ export default function TestCaseCreatePage() {
 
     try {
       setSaving(true);
-      const res = await api.post(CREATE_ENDPOINT, payload);
-      const d = res?.data?.data ?? res?.data ?? {};
+      const data = createTestcase(payload);
 
       // 성공 시 임시저장 삭제
       try { localStorage.removeItem(DRAFT_KEY); } catch {}
 
       showToast("success", "테스트 케이스가 등록되었습니다.");
-      navigate(`/testcases/${d.id}/detail`, { state: { justCreatedCode: form.code } });
+      navigate(`/testcases/${data.id}/detail`, { state: { justCreatedCode: form.code } });
     } catch (err) {
-      const message =
-        err?.response?.data?.message ||
-        (err?.response?.status ? `${err.response.status} ${err.response.statusText}` : err?.message) ||
-        "등록에 실패했습니다.";
+      if (err?.code === REQUEST_CANCELED_CODE) return;
+      const message = toErrorMessage(err);
+      setError(message);
       showToast("error", message);
     } finally {
       setSaving(false);
