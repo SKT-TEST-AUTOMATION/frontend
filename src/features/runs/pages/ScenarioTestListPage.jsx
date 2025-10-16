@@ -37,7 +37,7 @@ export default function ScenarioTestListPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await getScenarioTests({ page, size, sort: "id,desc" }, signal);
+      const res = await getScenarioTests({ page: page-1, size, sort: "id,desc" }, signal);
       const data = normalizePage(res);
       setData(data);
       setRows(data.content);
