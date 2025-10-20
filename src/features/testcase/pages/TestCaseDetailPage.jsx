@@ -24,7 +24,7 @@ export default function TestCaseDetailPage() {
     navigation: "",
     procedureDesc: "",
     expectedResult: "",
-    comment: "",
+    comment: ""
   });
   const [procedureSteps, setProcedureSteps] = useState([""]);
   const [expectedSteps, setExpectedSteps] = useState([""]);
@@ -36,6 +36,7 @@ export default function TestCaseDetailPage() {
     creatorId: null,
     createdAt: null,
     updatedAt: null,
+    excelFileName: null,
   });
 
   useEffect(() => {
@@ -47,7 +48,7 @@ export default function TestCaseDetailPage() {
       setErr(null);
       try {
         const data = await getTestcase(testCaseId, ac.signal);
-
+        console.log(data);
         // 본문 폼(보기 전용에 재사용)
         const nextForm = {
           code: data?.code ?? "",
@@ -56,7 +57,7 @@ export default function TestCaseDetailPage() {
           navigation: data?.navigation ?? "",
           procedureDesc: data?.procedureDesc ?? "",
           expectedResult: data?.expectedResult ?? "",
-          comment: data?.comment ?? "",
+          comment: data?.comment ?? ""
         };
 
         // 메타
@@ -66,6 +67,7 @@ export default function TestCaseDetailPage() {
           creatorId: data?.creatorId ?? null,
           createdAt: data?.createdAt ?? null,
           updatedAt: data?.updatedAt ?? null,
+          excelFileName: data?.excelFileName ?? null,
         };
 
         setForm(nextForm);
@@ -183,6 +185,8 @@ export default function TestCaseDetailPage() {
           setExpectedSteps={setExpectedSteps}
           readOnly={true}
           headerTabs={true}
+          testCaseId={testCaseId}
+          excelFileName={meta.excelFileName}
         />
       )}
     </div>
