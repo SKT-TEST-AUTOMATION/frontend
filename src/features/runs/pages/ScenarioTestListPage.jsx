@@ -88,7 +88,6 @@ const handlePick = async (device) => {
   } catch (e) {
     showToast("error", "테스트 실행 요청에 실패했습니다.");
     console.error("실행 요청 실패:", e);
-    // 필요시 toast/alert로 노출
   } finally {
     closePicker();
   }
@@ -245,7 +244,7 @@ const handlePick = async (device) => {
           totalPages={data?.totalPages ?? 1}
           size={size}
           totalElements={data?.totalElements}
-          unitLabel="개 항목"
+          unitLabel="개 결과"
           onPageChange={(next) => setPage(next)}
           onSizeChange={(nextSize) => { setSize(nextSize); setPage(1); }}
         />

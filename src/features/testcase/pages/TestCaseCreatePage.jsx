@@ -1,22 +1,18 @@
 // src/features/testcases/pages/TestCaseCreatePage.jsx
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+// controlled tab state & testCaseId flow
 import PageHeader from "../../../shared/components/PageHeader";
 import { useToast } from "../../../shared/hooks/useToast";
 import TestCaseForm from "../components/TestCaseForm";
 import { createTestcase } from "../../../services/testcaseAPI";
 import { REQUEST_CANCELED_CODE } from "../../../constants/errors";
 import { toErrorMessage } from "../../../services/axios";
-import { setErrorMap } from "zod/v3";
 
-const CREATE_ENDPOINT = "/testcases?userId=1"; // CreateTestCaseDto.Request
 const DRAFT_KEY = "testcase:new:draft";
 
 export default function TestCaseCreatePage() {
-  const navigate = useNavigate();
   const { showToast } = useToast();
   const [error, setError] = useState(null);
-  
   // DTO에 맞춘 폼 상태
   const [form, setForm] = useState({
     code: "",
@@ -27,11 +23,14 @@ export default function TestCaseCreatePage() {
     expectedResult: "",
     comment: "",
   });
-
   // 단계 배열 (전송 시 \n로 합침)
   const [procedureSteps, setProcedureSteps] = useState([""]);
   const [expectedSteps, setExpectedSteps] = useState([""]);
   const [saving, setSaving] = useState(false);
+
+  // controlled tab state & testCaseId flow
+  const [activeTab, setActiveTab] = useState("info");
+  const [testCaseId, setTestCaseId] = useState(null);
 
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
 
@@ -92,13 +91,13 @@ export default function TestCaseCreatePage() {
 
     try {
       setSaving(true);
-      const data = createTestcase(payload);
-
+      const data = await createTestcase(payload);
       // 성공 시 임시저장 삭제
       try { localStorage.removeItem(DRAFT_KEY); } catch {}
-
       showToast("success", "테스트 케이스가 등록되었습니다.");
-      navigate(`/testcases/${data.id}/detail`, { state: { justCreatedCode: form.code } });
+      setTestCaseId(data.id);
+      setForm((f) => ({ ...f, id: data.id }));
+      setActiveTab("excel");
     } catch (err) {
       if (err?.code === REQUEST_CANCELED_CODE) return;
       const message = toErrorMessage(err);
@@ -134,7 +133,7 @@ export default function TestCaseCreatePage() {
       </button>
       <button
         type="button"
-        onClick={() => navigate(-1)}
+        onClick={() => window.history.back()}
         className="px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
       >
         취소
@@ -171,6 +170,10 @@ export default function TestCaseCreatePage() {
         headerTabs={true}
         footerActions={footerActions}
         enterAddsStep={true} 
+        defaultTab="info"
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        testCaseId={testCaseId}
       />
     </form>
   );
