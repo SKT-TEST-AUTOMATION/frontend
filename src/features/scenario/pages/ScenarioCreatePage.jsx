@@ -1,12 +1,13 @@
-// src/features/scenarios/pages/ScenarioCreatePage.jsx
+// src/features/scenario/pages/ScenarioCreatePage.jsx
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useParams } from "react-router-dom";
 
 import PageHeader from "../../../shared/components/PageHeader";
 import { useToast } from "../../../shared/hooks/useToast";
 import ScenarioForm from "../components/ScenarioForm";
 
-import { createScenario } from "../../../services/scenarioAPI"
+import { createScenario, getScenario, updateScenario } from "../../../services/scenarioAPI"
 import { getTestcases } from "../../../services/testcaseAPI";
 import { REQUEST_CANCELED_CODE } from "../../../constants/errors";
 import { toErrorMessage } from "../../../services/axios";
@@ -16,6 +17,8 @@ const DRAFT_KEY = "scenario:new:draft";
 export default function ScenarioCreatePage() {
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const { scenarioId: routeScenarioId } = useParams();
+  const isEdit = !!routeScenarioId;
 
   // ---- 폼 상태
   const [form, setForm] = useState({
@@ -64,8 +67,9 @@ export default function ScenarioCreatePage() {
     return () => ac.abort();
   }, []);
 
-  // ---- 임시저장 로드
+  // ---- 임시저장 로드 (편집 모드에서는 건너뜀)
   useEffect(() => {
+    if (isEdit) return;
     try {
       const raw = localStorage.getItem(DRAFT_KEY);
       if (!raw) return;
@@ -81,7 +85,34 @@ export default function ScenarioCreatePage() {
       if (Array.isArray(draft.selected)) setSelected(draft.selected);
       showToast("info", "임시저장된 내용을 불러왔습니다.");
     } catch { /* ignore */ }
-  }, [showToast]);
+  }, [showToast, isEdit]);
+
+  // ---- 편집 모드: 기존 시나리오 로드
+  useEffect(() => {
+    if (!isEdit) return;
+    let canceled = false;
+    (async () => {
+      try {
+        const data = await getScenario(Number(routeScenarioId));
+        if (canceled) return;
+        setForm({
+          code: data.code || "",
+          name: data.name || "",
+          description: data.description || "",
+        });
+        // selected: [{id,label}] 복원
+        const sels = (data.testcases || data.testCases || []).map((tc) => ({
+          id: Number(tc.id),
+          label: `${tc.code || tc.tcId || `TC${tc.id}`} · ${tc.name || ""}`,
+          raw: tc,
+        }));
+        setSelected(sels);
+      } catch (e) {
+        showToast("error", toErrorMessage(e));
+      }
+    })();
+    return () => { canceled = true; };
+  }, [isEdit, routeScenarioId, showToast]);
 
   const validate = () => {
     if (!form.code.trim()) return "식별자(CODE)를 입력하세요.";
@@ -91,6 +122,7 @@ export default function ScenarioCreatePage() {
   };
 
   const onTempSave = () => {
+    if (isEdit) return;
     try {
       const draft = {
         ...form,
@@ -114,16 +146,21 @@ export default function ScenarioCreatePage() {
       code: form.code.trim(),
       name: form.name.trim(),
       description: (form.description || "").trim(),
-      testCaseIds: selected.map((s) => s.id), // **주문(정렬) 그대로 전송**
+      testCaseIds: selected.map((s) => s.id),
     };
 
     try {
       setSaving(true);
-      const data = await createScenario(payload);
-      try { localStorage.removeItem(DRAFT_KEY); } catch {}
-
-      showToast("success", "시나리오가 등록되었습니다.");
-      navigate(`/scenarios/${data.id}/detail`, { state: { justCreatedCode: form.code } });
+      if (isEdit) {
+        await updateScenario(Number(routeScenarioId), payload);
+        showToast("success", "시나리오가 수정되었습니다.");
+        navigate(`/scenarios/${routeScenarioId}/detail`);
+      } else {
+        const data = await createScenario(payload);
+        try { localStorage.removeItem(DRAFT_KEY); } catch {}
+        showToast("success", "시나리오가 등록되었습니다.");
+        navigate(`/scenarios/${data.id}/detail`, { state: { justCreatedCode: form.code } });
+      }
     } catch (err) {
       const message =
         err?.response?.data?.message ||
@@ -182,7 +219,7 @@ export default function ScenarioCreatePage() {
       className="flex flex-col gap-6 p-6 bg-gray-50 dark:bg-gray-900 min-h-screen text-sm"
     >
       <PageHeader
-        title="시나리오 등록"
+        title={isEdit ? "시나리오 수정" : "시나리오 등록"}
         subtitle="테스트 케이스들을 순서대로 묶어 시나리오를 구성합니다."
       />
 

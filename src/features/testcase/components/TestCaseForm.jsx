@@ -24,6 +24,7 @@ export default function TestCaseForm({
   procedureSteps, setProcedureSteps,
   expectedSteps, setExpectedSteps,
   readOnly = false,
+  isEdit = false,
   headerTabs = true,
   footerActions = null,
   enterAddsStep = true,
@@ -106,7 +107,7 @@ export default function TestCaseForm({
         />
       ) : (
         <div className="p-6">
-            <TestCaseExcelTab form={form} testCaseId={testCaseId} excelFileName={excelFileName} readOnly={false}/>
+            <TestCaseExcelTab form={form} testCaseId={testCaseId} excelFileName={excelFileName ?? form?.excelFileName} readOnly={readOnly}/>
         </div>
       )}
     </div>

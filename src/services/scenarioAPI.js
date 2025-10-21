@@ -22,6 +22,12 @@ export async function createScenario(payload) {
   return res?.data?.data ?? res?.data;
 }
 
+// 시나리오 수정
+export async function updateScenario(id, payload) {
+  const res = await api.put(`scenarios/${id}?userId=1`, payload);
+  return res?.data?.data ?? res?.data;
+}
+
 // 테스트 생성
 export async function createScenarioTest(payload) {
   const res = await api.post('scenarios/tests', payload);

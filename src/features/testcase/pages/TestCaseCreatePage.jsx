@@ -1,10 +1,12 @@
-// src/features/testcases/pages/TestCaseCreatePage.jsx
+// src/features/testcase/pages/TestCaseCreatePage.jsx
 import React, { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 // controlled tab state & testCaseId flow
 import PageHeader from "../../../shared/components/PageHeader";
 import { useToast } from "../../../shared/hooks/useToast";
 import TestCaseForm from "../components/TestCaseForm";
 import { createTestcase } from "../../../services/testcaseAPI";
+import { getTestcase, updateTestcase } from "../../../services/testcaseAPI";
 import { REQUEST_CANCELED_CODE } from "../../../constants/errors";
 import { toErrorMessage } from "../../../services/axios";
 
@@ -12,6 +14,9 @@ const DRAFT_KEY = "testcase:new:draft";
 
 export default function TestCaseCreatePage() {
   const { showToast } = useToast();
+  const navigate = useNavigate();
+  const { testCaseId: routeTestCaseId } = useParams();
+  const isEdit = !!routeTestCaseId;
   const [error, setError] = useState(null);
   // DTO에 맞춘 폼 상태
   const [form, setForm] = useState({
@@ -34,8 +39,9 @@ export default function TestCaseCreatePage() {
 
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
 
-  // 드래프트 로드
+  // 드래프트 로드 (편집 모드가 아닐 때만)
   useEffect(() => {
+    if (isEdit) return; // 편집 모드에서는 로컬 드래프트 무시
     try {
       const raw = localStorage.getItem(DRAFT_KEY);
       if (!raw) return;
@@ -54,7 +60,36 @@ export default function TestCaseCreatePage() {
       if (Array.isArray(draft.expectedSteps)) setExpectedSteps(draft.expectedSteps);
       showToast("info", "임시저장된 내용을 불러왔습니다.");
     } catch {/* ignore */}
-  }, [showToast]);
+  }, [showToast, isEdit]);
+
+  // 편집 모드: 기존 데이터 로드
+  useEffect(() => {
+    if (!isEdit) return;
+    let canceled = false;
+    (async () => {
+      try {
+        const data = await getTestcase(Number(routeTestCaseId));
+        if (canceled) return;
+        setForm((f) => ({
+          ...f,
+          id: data.id,
+          code: data.code || data.tcId || "",
+          name: data.name || "",
+          precondition: data.precondition || "",
+          navigation: data.navigation || "",
+          comment: data.comment || "",
+          excelFileName : data.excelFileName || "",
+        }));
+        setTestCaseId(data.id);
+        setProcedureSteps((data.procedureDesc || "").split("\n"));
+        setExpectedSteps((data.expectedResult || "").split("\n"));
+        setActiveTab("info");
+      } catch (e) {
+        showToast("error", toErrorMessage(e));
+      }
+    })();
+    return () => { canceled = true; };
+  }, [isEdit, routeTestCaseId, showToast]);
 
   const validate = () => {
     if (!form.code.trim()) return "식별자(CODE)를 입력하세요.";
@@ -63,6 +98,7 @@ export default function TestCaseCreatePage() {
   };
 
   const onTempSave = () => {
+    if (isEdit) return; // 편집 모드에서는 임시저장 사용하지 않음
     const draft = {
       ...form,
       procedureSteps,
@@ -91,13 +127,19 @@ export default function TestCaseCreatePage() {
 
     try {
       setSaving(true);
-      const data = await createTestcase(payload);
-      // 성공 시 임시저장 삭제
-      try { localStorage.removeItem(DRAFT_KEY); } catch {}
-      showToast("success", "테스트 케이스가 등록되었습니다.");
-      setTestCaseId(data.id);
-      setForm((f) => ({ ...f, id: data.id }));
-      setActiveTab("excel");
+      if (isEdit) {
+        await updateTestcase(Number(routeTestCaseId), payload);
+        showToast("success", "테스트 케이스가 수정되었습니다.");
+        navigate(`/testcases/${routeTestCaseId}/detail`);
+      } else {
+        const data = await createTestcase(payload);
+        // 성공 시 임시저장 삭제
+        try { localStorage.removeItem(DRAFT_KEY); } catch {}
+        showToast("success", "테스트 케이스가 등록되었습니다.");
+        setTestCaseId(data.id);
+        setForm((f) => ({ ...f, id: data.id }));
+        setActiveTab("excel");
+      }
     } catch (err) {
       if (err?.code === REQUEST_CANCELED_CODE) return;
       const message = toErrorMessage(err);
@@ -155,7 +197,7 @@ export default function TestCaseCreatePage() {
       className="flex flex-col gap-6 p-6 bg-gray-50 dark:bg-gray-900 min-h-screen text-sm"
     >
       <PageHeader
-        title="테스트 케이스 등록"
+        title={isEdit ? "테스트 케이스 수정" : "테스트 케이스 등록"}
         subtitle="테스트 케이스를 등록하여 시나리오 구성에 활용합니다."
       />
 
