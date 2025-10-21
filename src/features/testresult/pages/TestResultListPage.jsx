@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { normalizePage, toErrorMessage } from "../../../services/axios";
 import { Link } from "react-router-dom";
+import { getScenarioTestCaseResults } from "../../../services/runAPI";
 import PageHeader from "../../../shared/components/PageHeader";
 import PaginationBar from "../../../shared/components/PaginationBar";
 import { getScenarioTestResults } from "../../../services/scenarioAPI";
@@ -27,6 +28,24 @@ export default function TestResultListPage() {
 
   // 상세 토글(행 단위)
   const [expandedId, setExpandedId] = useState(null);
+
+  // per-run testcase results cache
+  const [tcMap, setTcMap] = useState({}); // { [runId]: { loading: boolean, error: string|null, rows: any[] } }
+  const handleExpandToggle = useCallback(async (runId) => {
+    setExpandedId((prev) => (prev === runId ? null : runId));
+
+    // if expanding and not yet loaded, fetch test case results
+    if (expandedId !== runId && !tcMap[runId]) {
+      setTcMap((m) => ({ ...m, [runId]: { loading: true, error: null, rows: [] } }));
+      try {
+        const res = await getScenarioTestCaseResults(runId);
+        const rows = Array.isArray(res) ? res : (res?.content || []);
+        setTcMap((m) => ({ ...m, [runId]: { loading: false, error: null, rows } }));
+      } catch (err) {
+        setTcMap((m) => ({ ...m, [runId]: { loading: false, error: toErrorMessage(err), rows: [] } }));
+      }
+    }
+  }, [expandedId, tcMap]);
 
   // -- 결과/상태 배지
   const ResultBadge = ({ result }) => {
@@ -221,7 +240,7 @@ export default function TestResultListPage() {
                       <div className="col-span-1 flex items-center justify-between sm:justify-center gap-2">
                         <ResultBadge result={runResult} />
                         <button
-                          onClick={() => setExpandedId(expanded ? null : id)}
+                          onClick={() => handleExpandToggle(id)}
                           className="inline-flex items-center gap-1.5 px-2 py-1.5 text-blue-600 hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-900/20 rounded-md"
                           title="상세 보기"
                         >
@@ -230,19 +249,77 @@ export default function TestResultListPage() {
                       </div>
                     </div>
 
-                    {/* 상세 패널: errorMessage / resultLog */}
+                    {/* 상세 패널: 테스트 케이스 결과, 에러 메시지, 결과 로그 */}
                     {expanded && (
                       <div className="px-5 pb-4 bg-gray-50/70 dark:bg-gray-800/60">
                         <div className="grid grid-cols-12 gap-4">
-                          <div className="col-span-12 md:col-span-6">
+                          {/* 테스트 케이스 결과 테이블 (맨 위) */}
+                          <div className="col-span-12">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="text-xs font-semibold text-gray-600 dark:text-gray-400">테스트 케이스 결과</div>
+                              {tcMap[id]?.loading && <span className="text-[11px] text-gray-500">불러오는 중…</span>}
+                            </div>
+
+                            {tcMap[id]?.error && (
+                              <div className="text-xs text-rose-600 dark:text-rose-300">{tcMap[id].error}</div>
+                            )}
+
+                            {!tcMap[id]?.loading && !tcMap[id]?.error && (
+                              <div className="rounded-md border border-gray-200 dark:border-gray-700 overflow-hidden">
+                                {/* header */}
+                                <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-900 text-[11px] font-semibold text-gray-600 dark:text-gray-300">
+                                  <div className="col-span-2">케이스 ID</div>
+                                  <div className="col-span-5">케이스명</div>
+                                  <div className="col-span-2">실행시간(ms)</div>
+                                  <div className="col-span-2 text-center">결과</div>
+                                  <div className="col-span-1 text-center">이슈</div>
+                                </div>
+                                {/* rows */}
+                                {(tcMap[id]?.rows?.length || 0) === 0 ? (
+                                  <div className="px-3 py-6 text-[12px] text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800">결과가 없습니다</div>
+                                ) : (
+                                  <div className="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-800">
+                                    {tcMap[id].rows.map((tc, i) => {
+                                      const caseId   = tc?.testCaseId ?? tc?.id ?? `#${i+1}`;
+                                      const caseCode = tc?.testCaseCode ?? tc?.code ?? "-";
+                                      const caseName = tc?.testCaseName ?? tc?.name ?? "-";
+                                      const durMs    = tc?.durationMs ?? tc?.elapsedMs ?? tc?.duration ?? "-";
+                                      const result   = tc?.runResult ?? tc?.result ?? "N/A";
+                                      const issueId  = tc?.issueId ?? tc?.issue ?? null;
+                                      return (
+                                        <div key={`${caseId}-${i}`} className="grid grid-cols-12 gap-2 px-3 py-2 text-[12px]">
+                                          <div className="col-span-2 text-gray-800 dark:text-gray-200" title={caseCode}>{caseCode}</div>
+                                          <div className="col-span-5 text-gray-700 dark:text-gray-300 truncate" title={caseName}>{caseName}</div>
+                                          <div className="col-span-2 text-gray-700 dark:text-gray-300">{durMs}</div>
+                                          <div className="col-span-2 flex items-center justify-center"><ResultBadge result={result} /></div>
+                                          <div className="col-span-1 flex items-center justify-center">
+                                            {issueId ? (
+                                              <Link to={`/issues/${issueId}`} className="text-blue-600 dark:text-blue-300 hover:underline">보기</Link>
+                                            ) : (
+                                              <span className="text-gray-400">-</span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* 에러 메시지 (두 번째) */}
+                          <div className="col-span-12">
                             <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5">에러 메시지</div>
                             <pre className="p-3 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-xs whitespace-pre-wrap break-words">
                               {errorMessage || "-"}
                             </pre>
                           </div>
-                          <div className="col-span-12 md:col-span-6">
-                            <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5">결과 로그</div>
-                            <pre className="p-3 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-xs whitespace-pre-wrap break-words">
+
+                          {/* 결과 로그 (세 번째, 스크롤 가능) */}
+                          <div className="col-span-12">
+                            <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mt-1.5 mb-1.5">결과 로그</div>
+                            <pre className="p-3 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-xs whitespace-pre-wrap break-words max-h-64 overflow-y-auto">
                               {resultLog || "-"}
                             </pre>
                           </div>

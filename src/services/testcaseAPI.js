@@ -21,3 +21,9 @@ export async function createTestcase(payload) {
   const res = await api.post('testcases?userId=1', payload);
   return res?.data?.data ?? res?.data;
 }
+
+// 테스트 케이스 업데이트
+export async function updateTestcase(id, payload) {
+  const res = await api.put(`testcases/${id}?userId=1`, payload);
+  return res?.data?.data ?? res?.data;
+}

@@ -6,3 +6,8 @@ export async function runScenarioTest(id, payload) {
   return res?.data?.data ?? res?.data;
 }
 
+// 테스트 결과 - 테스트 케이스 결과
+export async function getScenarioTestCaseResults(id) {
+  const res = await api.get(`scenarios/tests/results/${id}/testcases`);
+  return res?.data?.data ?? res?.data;
+}

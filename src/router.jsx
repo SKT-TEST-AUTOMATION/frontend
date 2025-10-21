@@ -23,14 +23,16 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <TestCaseListPage /> },
           { path: ':testCaseId/detail', element: <TestCaseDetailPage /> },
-          { path: 'new', element: <TestCaseCreatePage /> }
+          { path: 'new', element: <TestCaseCreatePage /> },
+          { path: ':testCaseId/edit', element: <TestCaseCreatePage /> }
         ]
       },
       { path: 'scenarios',
         children: [
           { index: true, element: <ScenarioListPage /> },
           { path: ':scenarioId/detail', element: <ScenarioDetailPage /> },
-          { path: 'new', element: <ScenarioCreatePage /> }
+          { path: 'new', element: <ScenarioCreatePage /> },
+          { path: ':scenarioId/edit', element: <ScenarioCreatePage /> }
         ]
       },
       {
