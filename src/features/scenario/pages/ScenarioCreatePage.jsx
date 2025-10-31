@@ -162,10 +162,8 @@ export default function ScenarioCreatePage() {
         navigate(`/scenarios/${data.id}/detail`, { state: { justCreatedCode: form.code } });
       }
     } catch (err) {
-      const message =
-        err?.response?.data?.message ||
-        (err?.response?.status ? `${err.response.status} ${err.response.statusText}` : err?.message) ||
-        "등록에 실패했습니다.";
+      if (err?.code === REQUEST_CANCELED_CODE) return;
+      const message = toErrorMessage(err);
       showToast("error", message);
     } finally {
       setSaving(false);
