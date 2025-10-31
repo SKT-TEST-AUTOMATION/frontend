@@ -3,9 +3,41 @@ import { useToast } from "../../../shared/hooks/useToast";
 import { readExcelFile, buildXlsxFromAOA } from "../../../shared/utils/excelUtils";
 import { downloadFile } from "../../../shared/utils/fileUtils";
 import ExcelPreviewEditor from "./ExcelPreviewEditor";
+import { REQUEST_CANCELED_CODE } from "../../../constants/errors";
+import { toErrorMessage } from "../../../services/axios";
+import { useNavigate } from "react-router-dom";
+import { uploadTestcaseExcel } from "../../../services/testcaseAPI";
 
+
+// ---- Inline editor template helpers (allow editing without uploading a file) ----
+const DEFAULT_CONFIG_HEADERS = [
+  "no", "action", "by", "value", "visible_if", "skip_on_error", "mandatory", "wait", "note"
+];
+
+function buildEmptyRows(rowCount = 20, colCount = DEFAULT_CONFIG_HEADERS.length) {
+  return Array.from({ length: rowCount }, () => Array.from({ length: colCount }, () => ""));
+}
+
+function makeTemplateMeta(sheetName = "custom_sheet") {
+  const header = DEFAULT_CONFIG_HEADERS.slice();
+  const rows = buildEmptyRows();
+  const aoa = [header, ...rows];
+  return {
+    sheets: [sheetName],
+    previewBySheet: { [sheetName]: aoa },
+    headerBySheet: { [sheetName]: header }
+  };
+}
+
+function sanitizeSheetName(raw) {
+  const name = String(raw ?? '').trim();
+  const invalid = /[\\/*?:\[\]]/g; // \\  /  *  ?  :  [  ]
+  const cleaned = name.replace(invalid, ' ').slice(0, 31).trim();
+  return cleaned || 'Sheet1';
+}
 
 export default function TestCaseExcelTab({ form, testCaseId, excelFileName, readOnly = false }) {
+  const navigate = useNavigate();
   const { showToast } = useToast();
 
   const [file, setFile] = useState(null); // 원본 File
@@ -29,6 +61,23 @@ export default function TestCaseExcelTab({ form, testCaseId, excelFileName, read
   const blocked = !testCaseId || readOnly;
   const disabledEditedUpload = blocked || uploading || !selectedSheet || previewAOA.length === 0;
 
+  // Helper: rename a sheet in meta
+  const renameSheetInMeta = useCallback((m, oldName, newName) => {
+    const nextMeta = {
+      ...m,
+      sheets: m.sheets.map((n) => (n === oldName ? newName : n)),
+      previewBySheet: { ...m.previewBySheet },
+      headerBySheet: { ...(m.headerBySheet || {}) },
+    };
+    nextMeta.previewBySheet[newName] = nextMeta.previewBySheet[oldName];
+    delete nextMeta.previewBySheet[oldName];
+    if (nextMeta.headerBySheet[oldName]) {
+      nextMeta.headerBySheet[newName] = nextMeta.headerBySheet[oldName];
+      delete nextMeta.headerBySheet[oldName];
+    }
+    return nextMeta;
+  }, []);
+
   // 서버 저장본 불러오기 → 미리보기 세팅
   const loadServerExcel = async () => {
     if (!testCaseId) return;
@@ -46,7 +95,9 @@ export default function TestCaseExcelTab({ form, testCaseId, excelFileName, read
       setPreviewAOA(m.previewBySheet[preferred] || []);
       showToast("success","불러오기 완료");
     } catch (err) {
-      showToast("error", "불러오기 실패");
+      if (err?.code === REQUEST_CANCELED_CODE) return;
+      const message = toErrorMessage(err);
+      showToast("error", message);
     }
   };
 
@@ -111,6 +162,29 @@ export default function TestCaseExcelTab({ form, testCaseId, excelFileName, read
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
+  const startFromTemplate = useCallback(() => {
+    const initialName = sanitizeSheetName(form?.name || 'custom_sheet');
+    const m = makeTemplateMeta(initialName);
+    setFile(null);
+    setMeta(m);
+    setSelectedSheet(initialName);
+    setPreviewAOA(m.previewBySheet[initialName]);
+    setEditorOpen(true);
+    showToast("info", "기본 템플릿으로 새 시트를 시작합니다.");
+  }, [form?.name, showToast]);
+
+  // 템플릿 모드일 때(TestCase 이름을 시트명으로 자동 설정/동기화)
+  useEffect(() => {
+    if (!meta || file) return; // 파일 업로드 모드는 자동 변경하지 않음
+    if (!selectedSheet) return;
+    const desired = sanitizeSheetName(form?.name || selectedSheet);
+    if (desired && desired !== selectedSheet && !meta.sheets.includes(desired)) {
+      const nextMeta = renameSheetInMeta(meta, selectedSheet, desired);
+      setMeta(nextMeta);
+      setSelectedSheet(desired);
+    }
+  }, [form?.name, meta, file, selectedSheet, renameSheetInMeta]);
+
   useEffect(() => {
   if (excelFileName && testCaseId && !meta) {
     loadServerExcel();
@@ -129,17 +203,19 @@ export default function TestCaseExcelTab({ form, testCaseId, excelFileName, read
     setUploading(true);
     try {
       const blob = buildXlsxFromAOA(selectedSheet, previewAOA);
-      const filename = `${form.code || testCaseId}-${selectedSheet}.xlsx`;
-      const fd = new FormData();
-      fd.append("file", blob, filename);
-      fd.append("sheetName", selectedSheet);
-      fd.append("edited", "true");
-      // POST /api/v1/testcases/${testCaseId}/excel?userId=1
-      const res = await fetch(`/api/v1/testcases/${encodeURIComponent(testCaseId)}/excel?userId=1`, { method: "POST", body: fd });
-      if (!res.ok) throw new Error((await res.text().catch(() => "")) || `HTTP ${res.status}`);
-      showToast("success", "수정본을 업로드했습니다.")
+      const filename = `${form?.code || testCaseId}-${selectedSheet}.xlsx`;
+      const res = await uploadTestcaseExcel(
+        testCaseId,
+        { file: blob, sheetName: selectedSheet, filename, edited: true }
+      );
+      showToast("success", "수정본을 업로드했습니다.");
+      setEditorOpen(false);
+      // 업로드 성공 시 조회 페이지로 이동
+      navigate(`/testcases/${testCaseId}/detail`, { replace: true });
     } catch (err) {
-      showToast("error", "수정본 업로드에 실패했습니다.")
+      if (err?.code === REQUEST_CANCELED_CODE) return;
+      const message = toErrorMessage(err);
+      showToast("error", message);
     } finally {
       setUploading(false);
     }
@@ -253,11 +329,32 @@ export default function TestCaseExcelTab({ form, testCaseId, excelFileName, read
       </div>
       }
 
+      {/* 템플릿으로 새 시트 시작 */}
+      {!isRO && !meta && (
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-xs text-slate-500">엑셀 파일 없이도 바로 작성할 수 있어요.</div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={startFromTemplate}
+              className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm"
+            >
+              빈 시트(템플릿)로 시작
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 시트 선택 + 업로드 버튼 */}
       <div className="items-center">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex-1 min-w-0">
-            <label className="block text-sm font-medium text-gray-800 dark:text-gray-100 mb-2 md:mb-0">시트 선택</label>
+            <label className="block text-sm font-medium text-gray-800 dark:text-gray-100 mb-2 md:mb-0">
+              시트 선택
+              {meta && !file && (
+                <span className="text-[11px] text-slate-500 ml-3">(템플릿에서 작성 중)</span>
+              )}
+            </label>
             <div className="max-h-64 overflow-auto rounded-lg border border-slate-200 dark:border-slate-700 divide-y divide-slate-200 dark:divide-slate-700">
               {(meta?.sheets || []).map((name) => (
                 <label key={name} className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50">
@@ -325,7 +422,7 @@ export default function TestCaseExcelTab({ form, testCaseId, excelFileName, read
                         onChange={(e) => updateCell(ri, ci, e.target.value)}
                         className={["w-full bg-transparent outline-none", ri === 0 ? "font-semibold" : ""].join(" ")}
                         disabled={blocked}
-                        readOnly={!editorOpen}
+                        readOnly={false}
                       />
                     </td>
                   ))}

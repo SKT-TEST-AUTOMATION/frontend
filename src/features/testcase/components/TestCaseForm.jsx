@@ -32,6 +32,7 @@ export default function TestCaseForm({
   activeTab: controlledTab,
   setActiveTab: setControlledTab,
   testCaseId,
+  testCaseName,
   excelFileName
 }) {
   const inputCls = [
