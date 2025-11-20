@@ -1,78 +1,88 @@
-// src/features/testcase/components/ExcelPreviewEditor.jsx
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 
-// --- Column help tooltips (header based) ---
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { FixedSizeList as List} from "react-window";
+
+/* ───────────── Icons ───────────── */
+const PlusIcon = ({ className }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+  </svg>
+);
+
+const TrashIcon = ({ className }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+  </svg>
+);
+
+const XIcon = ({ className }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+  </svg>
+);
+
+const SaveIcon = ({ className }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+  </svg>
+);
+
+/* ───────────── Column Help ───────────── */
 const COLUMN_HELP = {
-  no: {
-    title: "no",
-    desc: "스텝 번호(가급적 숫자). 실행/점프 기준으로 사용.",
-    example: "1, 2, 3 …",
-  },
-  action: {
-    title: "action",
-    desc: "수행할 동작. click/input/tap/image/key/back/swipe 등.",
-    example: "click / input / tap / image …",
-  },
-  by: {
-    title: "by",
-    desc: "대상 찾는 방법 또는 tap 좌표 타입.",
-    example: "XPATH, ID, ACCESSIBILITY_ID, CLASS_NAME, ANDROID_UIAUTOMATOR, coord, abs",
-  },
-  value: {
-    title: "value",
-    desc: "선택자/좌표/이미지 경로 등. 액션에 따라 형식이 달라짐.",
-    example: `//... 또는 0.9,0.1 또는 images/x.png; thr=0.8; scales=1.0,0.97,1.03`,
-  },
-  input_text: {
-    title: "input_text",
-    desc: "입력할 텍스트 또는 특수키.",
-    example: "myid123 / \\n (엔터) / ABC123",
-  },
-  visible_if: {
-    title: "visible_if",
-    desc: "보이면 실행. *_type 과 함께 사용(text/xpath/id 등).",
-    example: `text + "로그인" / xpath + //android...`,
-  },
-  skip_on_error: {
-    title: "skip_on_error",
-    desc: "에러 무시 여부.",
-    example: "Y / N (기본 N)",
-  },
-  mandatory: {
-    title: "mandatory",
-    desc: "필수 스텝 여부. 실패 시 테스트 중단을 결정.",
-    example: "Y / N (기본 Y 권장)",
-  },
-  wait: {
-    title: "wait",
-    desc: "스텝 실행 전 기다리는 시간(초 또는 ms).",
-    example: "2 / 500ms",
-  },
+  no: { title: "no", desc: "스텝 번호(가급적 숫자로 입력하세요).", example: "1, 2, 3 …" },
+  action: { title: "action", desc: "수행할 동작.", example: "click / input / tap / image / key / back / swipe" },
+  by: { title: "by", desc: "대상을 찾는 방법 또는 좌표 타입.", example: "XPATH, ID, ACCESSIBILITY_ID, CLASS_NAME, ANDROID_UIAUTOMATOR, coord, abs" },
+  value: { title: "value", desc: "선택자/좌표/이미지 경로 등." },
+  input_text: { title: "input_text", desc: "입력할 텍스트/특수키.", example: "myid123 / \\n (엔터)" },
+  visible_if: { title: "visible_if", desc: "이 요소가 보이면 실행. visible_if_type과 함께 사용합니다." },
+  skip_on_error: { title: "skip_on_error", desc: "에러 무시 여부.", example: "Y / N (기본 N)" },
+  mandatory: { title: "mandatory", desc: "필수 스텝 여부.", example: "Y / N" },
+  wait: { title: "wait", desc: "실행 전 대기 시간(초).", example: "2(2초) / 0.5(0.5초)" },
 };
-const getColHelp = (name) => {
-  const key = String(name || "").trim().toLowerCase();
-  return COLUMN_HELP[key] || null;
+
+const HELP_ALIAS = {
+  step: "no",
+  seq: "no",
+  order: "no",
+  sleep: "wait",
+  delay: "wait",
+  text: "input_text",
+  input: "input_text",
+  strategy: "by",
+  locator_by: "by",
+  locator: "value",
+  selector: "value",
+  target: "value",
 };
+
+const lc = (s) => String(s || "").trim().toLowerCase();
+
+const normHelpKey = (name) => {
+  const k = lc(name);
+  return COLUMN_HELP[k] ? k : HELP_ALIAS[k] || k;
+};
+
+const getColHelp = (name) => COLUMN_HELP[normHelpKey(name)] || null;
+
 function HeaderHelp({ help }) {
-  const data = help;
   const btnRef = useRef(null);
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
-
-  if (!data) return null;
+  const hasHelp = !!help;
 
   const onOpen = () => {
+    if (!hasHelp) return;
     const el = btnRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    // Position below and aligned to the right edge of the icon
     setPos({
-      top: r.bottom + 8, // 8px gap
-      left: Math.min(window.innerWidth - 360, Math.max(8, r.right - 320)), // keep within viewport (tooltip width ~340)
+      top: r.bottom + 8,
+      left: Math.min(window.innerWidth - 360, Math.max(8, r.right - 320)),
     });
     setOpen(true);
   };
+
   const onClose = () => setOpen(false);
 
   useEffect(() => {
@@ -86,6 +96,14 @@ function HeaderHelp({ help }) {
     };
   }, [open]);
 
+  if (!hasHelp) {
+    return (
+      <span className="ml-1 w-4 h-4 inline-flex items-center justify-center text-[10px] opacity-0 pointer-events-none">
+        ?
+      </span>
+    );
+  }
+
   return (
     <>
       <button
@@ -95,496 +113,432 @@ function HeaderHelp({ help }) {
         onMouseLeave={onClose}
         onFocus={onOpen}
         onBlur={onClose}
-        className="w-5 h-5 inline-flex items-center justify-center rounded-full border border-slate-300 dark:border-slate-700 text-[11px] text-slate-600 dark:text-slate-300 bg-white/80 dark:bg-slate-900/80 hover:bg-amber-50 dark:hover:bg-amber-900/30"
-        aria-label="컬럼 도움말"
+        className="ml-1 w-4 h-4 inline-flex items-center justify-center rounded-full bg-slate-100 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 transition text-[10px]"
       >
         ?
       </button>
       {open &&
+        hasHelp &&
         createPortal(
-          // z-index and positioning for above modal overlay + viewport safety
           <div
-            role="tooltip"
-            className="fixed w-[340px] bg-slate-900 text-slate-100 border border-slate-700 rounded-md shadow-xl text-left p-3"
-            style={{ top: pos.top, left: pos.left, zIndex: 2147483657 }}
-            onMouseEnter={onOpen}
-            onMouseLeave={onClose}
+            className="fixed w-[320px] bg-slate-800 text-white shadow-xl rounded-lg text-left p-4 text-sm leading-relaxed z-[9999]"
+            style={{ top: pos.top, left: pos.left }}
           >
-            <div className="text-xs font-semibold mb-1">{data.title}</div>
-            <div className="text-[11px] leading-5 space-y-1">
-              <div>{data.desc}</div>
-              {data.example ? (
-                <div className="mt-1">
-                  <span className="text-slate-400">예시:</span>{" "}
-                  <code className="break-all">{data.example}</code>
-                </div>
-              ) : null}
-            </div>
+            <div className="font-bold mb-1 text-indigo-300">{help.title}</div>
+            <div className="opacity-90">{help.desc}</div>
+            {help.example && (
+              <div className="mt-2 text-xs text-slate-400 bg-slate-900/50 p-2 rounded border border-slate-700/50 font-mono break-all">
+                예시: {help.example}
+              </div>
+            )}
           </div>,
           document.body
         )}
     </>
   );
 }
-// --- end column help ---
-// --- Inline help: action-based tooltips for Excel authoring ---
-const HELP_MAP = {
-  click: {
-    title: "click",
-    job: "버튼/요소 누르기",
-    required: "action, by, value",
-    by: "XPATH, ID, ACCESSIBILITY_ID, CLASS_NAME, ANDROID_UIAUTOMATOR",
-    value: "버튼·요소 선택자",
-    inputText: "-",
-    note: "가장 기본 액션",
-    examples: [
-      { k: "XPATH", v: `//android.widget.TextView[@text="로그인"]` },
-      { k: "ID", v: "com.app:id/btn_ok" }
-    ],
-  },
-  input: {
-    title: "input",
-    job: "글자 입력하기",
-    required: "action, by, value, input_text",
-    by: "XPATH, ID, ACCESSIBILITY_ID, CLASS_NAME, ANDROID_UIAUTOMATOR",
-    value: "value=입력창 선택자",
-    inputText: "입력할 값",
-    note: "value는 선택자, 입력은 input_text",
-    examples: [
-      { k: "ID", v: "com.app:id/et_id + input_text=myid123" }
-    ],
-  },
-  tap: {
-    title: "tap",
-    job: "화면 좌표 탭",
-    required: "action, by, value",
-    by: "coord, abs",
-    value: "coord=0.90,0.10 또는 abs=540,1760",
-    inputText: "-",
-    note: "coord=해상도 독립(추천)",
-    examples: [
-      { k: "coord", v: "0.90,0.10" },
-      { k: "abs", v: "540,1760" }
-    ],
-  },
-  image: {
-    title: "image",
-    job: "그림으로 찾아 탭",
-    required: "action, value",
-    by: "-",
-    value: "이미지 경로; thr=0.8; scales=1.0,0.97,1.03; tap=no",
-    inputText: "-",
-    note: "그림 비교 후 탭, tap=no면 감지만",
-    examples: [
-      { k: "경로", v: "images/x_button.png; thr=0.82; scales=1.0,0.97,1.03" }
-    ],
-    imageOpts: "thr, retries, interval_ms, scales, roi, tap_offset, tap"
-  },
-  key: {
-    title: "key",
-    job: "키 입력",
-    required: "action, input_text",
-    by: "-",
-    value: "-",
-    inputText: `\\n, ABC123 등`,
-    note: "특수키/문자 입력",
-  },
-  back: {
-    title: "back",
-    job: "뒤로가기",
-    required: "action",
-    by: "-",
-    value: "(비움)",
-    inputText: "-",
-    note: "휴대폰 뒤로가기 버튼",
-  },
-  swipe: {
-    title: "swipe",
-    job: "화면 스크롤",
-    required: "action, value",
-    by: "-",
-    value: "x1,y1,x2,y2[,시간ms] 예: 500,1600,500,600(아래→위)",
-    inputText: "-",
-    note: "드래그/스크롤",
-  },
-};
 
-const GENERAL_HELP = {
-  title: "도움말",
-  job: "행 단위 작성 가이드",
-  required: "action, by, value (필수) · input_text(일부 액션) · 기타 옵션",
-  by: "XPATH, ID, ACCESSIBILITY_ID, CLASS_NAME, ANDROID_UIAUTOMATOR, coord/abs(image 제외)",
-  value: "액션에 따라 선택자/좌표/이미지 경로 등",
-  inputText: "input/ key 등에서 사용",
-  note: "action을 선택하면 해당 액션 전용 설명이 표시됩니다.",
-  examples: [
-    { k: "click", v: "XPATH → //android.widget.TextView[@text=\"로그인\"]" },
-    { k: "input", v: "ID → com.app:id/et_id + input_text=myid123" },
-    { k: "tap", v: "coord → 0.90,0.10 / abs → 540,1760" },
-    { k: "image", v: "images/x_button.png; thr=0.82; scales=1.0,0.97,1.03" },
-    { k: "key", v: "input_text=\\n (엔터)" },
-    { k: "swipe", v: "500,1600,500,600 (아래→위)" },
-  ],
+/* ───────────── Row Help ───────────── */
+const HELP_MAP = {
+  click: { title: "click", job: "클릭", required: "action, by, value" },
+  input: { title: "input", job: "입력", required: "action, by, value, input_text" },
+  tap: { title: "tap", job: "탭(좌표)", required: "action, by, value" },
+  image: { title: "image", job: "이미지 매칭", required: "action, value" },
+  key: { title: "key", job: "키 입력", required: "action, input_text" },
+  back: { title: "back", job: "뒤로가기", required: "action" },
+  swipe: { title: "swipe", job: "스와이프", required: "action, value" },
+  app_start: { title: "app_start", job: "앱 실행", required: "action, value" },
+  app_close: { title: "app_close", job: "앱 종료", required: "action, value" },
+  scan_find: { title: "scan_find", job: "스크롤하여 요소 찾기", required: "action, value" },
 };
 
 function getRowHelp(previewAOA, ri) {
   try {
     const header = previewAOA?.[0] || [];
     const row = previewAOA?.[ri] || [];
-    const lower = (v) => (String(v || "").trim().toLowerCase());
-    const colIndex = (name) =>
-      header.findIndex((h) => lower(h) === lower(name));
-    const actionIdx = colIndex("action");
+    const lower = (v) => String(v || "").trim().toLowerCase();
+    const colIndex = (name) => header.findIndex((h) => lower(h) === lower(name));
+    const actionIdx = ["action", "type"].map(colIndex).find((x) => x >= 0);
     const action = lower(row[actionIdx] || "");
-    const help = HELP_MAP[action];
-    if (!help) return null;
-
-    // Extract some dynamic values if present
-    const byIdx = colIndex("by");
-    const valueIdx = colIndex("value");
-    const inputIdx = colIndex("input_text");
-
-    return {
-      ...help,
-      byValue: row?.[byIdx],
-      valueValue: row?.[valueIdx],
-      inputValue: row?.[inputIdx],
-    };
+    return HELP_MAP[action] || null;
   } catch {
     return null;
   }
 }
 
-function HelpCell({ help }) {
-  const data = help || GENERAL_HELP;
-  const btnRef = useRef(null);
-  const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState({ top: 0, left: 0 });
-
-  const onOpen = () => {
-    const el = btnRef.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    // Place to the left of the icon (since it's at sticky right), vertically centered
-    const width = 340;
-    const heightGap = 8;
-    const top = Math.min(
-      window.innerHeight - 16,
-      Math.max(8, r.top + r.height / 2)
-    );
-    const left = Math.max(8, Math.min(window.innerWidth - width - 8, r.left - width - 12));
-    setPos({ top, left });
-    setOpen(true);
-  };
-  const onClose = () => setOpen(false);
-
-  useEffect(() => {
-    if (!open) return;
-    const close = () => setOpen(false);
-    window.addEventListener("scroll", close, true);
-    window.addEventListener("resize", close);
-    return () => {
-      window.removeEventListener("scroll", close, true);
-      window.removeEventListener("resize", close);
-    };
-  }, [open]);
-
+function RowHelpButton({ help }) {
+  if (!help) return null;
   return (
-    <>
-      <button
-        ref={btnRef}
-        type="button"
-        onMouseEnter={onOpen}
-        onMouseLeave={onClose}
-        onFocus={onOpen}
-        onBlur={onClose}
-        className="w-6 h-6 inline-flex items-center justify-center rounded-full border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 bg-white/80 dark:bg-slate-900/80 hover:bg-amber-50 dark:hover:bg-amber-900/30"
-        aria-label="행 도움말"
-      >
-        ?
-      </button>
-      {open &&
-        createPortal(
-          <div
-            role="tooltip"
-            className="fixed w-[340px] bg-slate-900 text-slate-100 border border-slate-700 rounded-md shadow-xl text-left p-3"
-            style={{ top: pos.top, left: pos.left, zIndex: 2147483657, transform: 'translateY(-50%)' }}
-            onMouseEnter={onOpen}
-            onMouseLeave={onClose}
-          >
-            <div className="text-xs font-semibold mb-1">
-              {data.title} · {data.job}
-            </div>
-            {!help && (
-              <div className="mb-1 text-[11px] text-amber-300">
-                action을 입력하면 해당 액션 전용 설명이 표시됩니다.
-              </div>
-            )}
-            <div className="text-[11px] leading-5 space-y-1">
-              <div><span className="text-slate-400">필수 컬럼:</span> {data.required}</div>
-              <div><span className="text-slate-400">by:</span> {data.by}</div>
-              <div><span className="text-slate-400">value:</span> {data.value}</div>
-              <div><span className="text-slate-400">input_text:</span> {data.inputText}</div>
-              {data.imageOpts ? (
-                <div><span className="text-slate-400">이미지 옵션:</span> {data.imageOpts}</div>
-              ) : null}
-              <div><span className="text-slate-400">비고:</span> {data.note}</div>
-              {Array.isArray(data.examples) && data.examples.length > 0 ? (
-                <div className="mt-1">
-                  <div className="text-slate-400">예시</div>
-                  <ul className="list-disc list-inside">
-                    {data.examples.map((ex, i) => (
-                      <li key={i} className="break-all">{ex.k} → <code>{ex.v}</code></li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-              {help && (help.byValue || help.valueValue || help.inputValue) ? (
-                <div className="mt-1 border-t border-slate-700 pt-1">
-                  <div className="text-slate-400">현재 행 값</div>
-                  <ul className="list-disc list-inside">
-                    {help.byValue ? <li>by: <code>{String(help.byValue)}</code></li> : null}
-                    {help.valueValue ? <li>value: <code>{String(help.valueValue)}</code></li> : null}
-                    {help.inputValue ? <li>input_text: <code>{String(help.inputValue)}</code></li> : null}
-                  </ul>
-                </div>
-              ) : null}
-            </div>
-          </div>,
-          document.body
-        )}
-    </>
+    <div className="group relative flex items-center">
+      <span className="ml-1 w-4 h-4 rounded-full bg-emerald-100 text-emerald-600 text-[9px] flex items-center justify-center font-bold cursor-help">
+        i
+      </span>
+      <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 w-max max-w-[200px] bg-slate-800 text-white text-xs p-2 rounded shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">
+        <div className="font-bold text-emerald-300 mb-0.5">{help.title}</div>
+        <div className="text-[10px] opacity-80">{help.job}</div>
+        <div className="mt-0.5 text-[10px] opacity-60">
+          <span className="text-slate-400">필수:</span> {help.required}
+        </div>
+      </div>
+    </div>
   );
 }
-// --- end of inline help ---
 
-/**
- * ExcelPreviewEditor
- * - 풀스크린 편집 전용 모달
- * - 시트 탭 전환, 인라인 편집, 업로드 트리거
+/* ───────────── Styled Inputs ───────────── */
+const YES_NO = ["Y", "N"];
+const ACTION_OPTIONS = ["click", "input", "tap", "image", "key", "back", "swipe", "app_start", "app_close", "scan_find"];
+const BY_OPTIONS = ["xpath", "id", "accessibility id", "class name", "android uiautomator", "coord", "abs", "found"];
+
+// 포커스 시에만 강조되도록 최소한의 border (XSS 위험 없이 value만 출력)
+const baseInputClass =
+  "w-full h-full px-2 bg-transparent text-sm text-slate-700 placeholder-slate-300 " +
+  "border-2 border-transparent rounded " +
+  "focus:bg-white focus:border-indigo-500 focus:shadow-sm " +
+  "hover:bg-slate-50 outline-none transition-all";
+
+const Select = React.memo(function Select({ value, onChange, options, disabled }) {
+  return (
+    <div className="relative w-full h-full">
+      <select
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+        className={`${baseInputClass} appearance-none cursor-pointer`}
+      >
+        <option value=""></option>
+        {options.map((o) => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
+      </select>
+      <div className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none text-[10px]">
+        ▼
+      </div>
+    </div>
+  );
+});
+
+const Text = React.memo(function Text({ value, onChange, disabled }) {
+  return (
+    <input
+      value={value ?? ""}
+      onChange={(e) => onChange(e.target.value)}
+      disabled={disabled}
+      className={`${baseInputClass}`}
+      autoComplete="off"
+    />
+  );
+});
+
+const NumberText = React.memo(function NumberText({ value, onChange, disabled }) {
+  return (
+    <input
+      value={value ?? ""}
+      onChange={(e) => {
+        const v = e.target.value;
+        if (/^\d*(\.\d*)?$/.test(v) || v === "") onChange(v);
+      }}
+      disabled={disabled}
+      className={`${baseInputClass} text-right`}
+      inputMode="numeric"
+      autoComplete="off"
+    />
+  );
+});
+
+/* ───────────── Column Widths ───────────── */
+const COL_ALIASES = {
+  no: ["no", "step", "seq", "order"],
+  wait: ["wait", "sleep", "delay"],
+  mandatory: ["mandatory", "required", "must"],
+  skip_on_error: ["skip_on_error", "skiponerror", "skip"],
+  action: ["action", "type"],
+  by: ["by", "locator_by", "strategy"],
+  input_text: ["input_text", "text", "input"],
+  value: ["value", "locator", "selector", "target"],
+  visible_if: ["visible_if"],
+  visible_if_type: ["visible_if_type"],
+  jump_if_visible: ["jump_if_visible"],
+  jump_if_visible_type: ["jump_if_visible_type"],
+  true_jump_no: ["true_jump_no"],
+  false_jump_no: ["false_jump_no"],
+  name: ["name", "title"],
+  memo: ["memo", "note", "comment"],
+};
+
+const isCol = (name, key) => COL_ALIASES[key]?.includes(lc(name)) || false;
+
+function widthClassForHeader(h) {
+  const k = lc(h);
+  if (isCol(k, "no") || isCol(k, "wait") || isCol(k, "true_jump_no") || isCol(k, "false_jump_no")) return "min-w-[70px] w-[80px]";
+  if (isCol(k, "mandatory") || isCol(k, "skip_on_error") || isCol(k, "action") || isCol(k, "by")) return "min-w-[120px] w-[130px]";
+  if (isCol(k, "input_text")) return "min-w-[200px] w-[220px]";
+  if (isCol(k, "name")) return "min-w-[220px] w-[240px]";
+  if (isCol(k, "value") || isCol(k, "memo")) return "min-w-[320px] w-[360px]";
+  return "min-w-[160px] w-[180px]";
+}
+
+const EditorFor = React.memo(function EditorFor({ headerName, value, onChange, disabled }) {
+  if (isCol(headerName, "action")) return <Select value={value} onChange={onChange} options={ACTION_OPTIONS} disabled={disabled} />;
+  if (isCol(headerName, "by")) return <Select value={value} onChange={onChange} options={BY_OPTIONS} disabled={disabled} />;
+  if (isCol(headerName, "mandatory") || isCol(headerName, "skip_on_error"))
+    return <Select value={value} onChange={onChange} options={YES_NO} disabled={disabled} />;
+  if (isCol(headerName, "wait") || isCol(headerName, "no") || isCol(headerName, "true_jump_no") || isCol(headerName, "false_jump_no"))
+    return <NumberText value={value} onChange={onChange} disabled={disabled} />;
+  return <Text value={value} onChange={onChange} disabled={disabled} />;
+});
+
+/* ───────────── react-window Row Renderer ───────────── */
+const ROW_HEIGHT = 44; // 고정 행 높이
+
+const RowRenderer = ({ index, style, data }) => {
+  const { previewAOA, headers, onChangeCell, onInsertRow, onDeleteRow, readOnly } = data;
+
+  const ri = index + 1; // 0행이 header라서 +1
+  const row = previewAOA[ri] || [];
+  const rowHelp = getRowHelp(previewAOA, ri);
+
+  return (
+    <div
+      style={{
+        ...style, // react-window가 제공하는 position/transform 등
+        display: "flex",
+        borderBottom: "1px solid rgba(226,232,240,0.8)",
+        backgroundColor: index % 2 === 0 ? "#ffffff" : "#f9fafb",
+      }}
+      className="group"
+    >
+      {/* 왼쪽 컨트롤 영역 */}
+      <div
+        className="flex items-center justify-between px-2 border-r border-slate-200 bg-white"
+        style={{
+          width: 70,
+          flexShrink: 0,
+        }}
+      >
+        <span className="text-xs font-mono text-slate-400 w-5 text-center">{ri}</span>
+        {!readOnly && (
+          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+              onClick={() => onInsertRow?.(ri)}
+              className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition"
+              title="행 추가"
+              type="button"
+            >
+              <PlusIcon className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => onDeleteRow?.(ri)}
+              className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition"
+              title="행 삭제"
+              type="button"
+            >
+              <TrashIcon className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+        <div className="w-4 flex justify-center">
+          <RowHelpButton help={rowHelp} />
+        </div>
+      </div>
+
+      {/* 실제 셀들 */}
+      {headers.map((h, ci) => (
+        <div
+          key={ci}
+          className={`border-r border-slate-100 last:border-r-0 flex items-center px-0.5 ${widthClassForHeader(h)}`}
+        >
+          <EditorFor
+            headerName={h}
+            value={row?.[ci] ?? ""}
+            disabled={readOnly}
+            onChange={(v) => onChangeCell?.(ri, ci, v)}
+          />
+        </div>
+      ))}
+    </div>
+  );
+};
+
+/* ──────────────────────────────────────────────────────────────────────────────
+ * MAIN COMPONENT: ExcelPreviewEditor (react-window 통합 버전)
+ * ──────────────────────────────────────────────────────────────────────────────
  */
 export default function ExcelPreviewEditor({
   open,
   onClose,
-  meta,                 // { sheets, previewBySheet }
+  meta,
   selectedSheet,
-  onChangeSelectedSheet, // (unused in editor) 단일 시트 편집 모드
-  previewAOA,           // [][]
-  onChangeCell,         // (ri, ci, val) => void
-  onInsertRow,          // (ri) => void  (해당 행 아래에 새 행 추가)
-  onDeleteRow,          // (ri) => void  (해당 행 삭제)
-  onUpload,             // () => Promise<void>
+  onChangeSelectedSheet,
+  previewAOA,
+  onChangeCell,
+  onInsertRow,
+  onDeleteRow,
+  onUpload,
   uploading = false,
   readOnly = false,
 }) {
-  const panelRef = useRef(null);
-  const [colWidths, setColWidths] = useState([]); // px widths per column (excluding control column)
-  const dragRef = useRef({ active: false, idx: -1, startX: 0, startW: 0 });
-
-  // initialize widths when sheet changes
-  useEffect(() => {
-    const cols = (previewAOA?.[0]?.length) || 0;
-    if (cols <= 0) { setColWidths([]); return; }
-    setColWidths((prev) => {
-      if (prev?.length === cols) return prev;
-      // default width 160px per column
-      return Array.from({ length: cols }, () => 160);
-    });
-  }, [selectedSheet, previewAOA]);
-
-  const startDrag = useCallback((e, idx) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const w = colWidths[idx] ?? 160;
-    dragRef.current = { active: true, idx, startX: e.clientX, startW: w };
-    document.body.classList.add("select-none");
-    window.addEventListener("mousemove", onDrag);
-    window.addEventListener("mouseup", endDrag);
-  }, [colWidths]);
-
-  const onDrag = useCallback((e) => {
-    const s = dragRef.current;
-    if (!s.active) return;
-    const dx = e.clientX - s.startX;
-    const nextW = Math.max(80, s.startW + dx); // min 80px
-    setColWidths((prev) => prev.map((w, i) => (i === s.idx ? nextW : w)));
-  }, []);
-
-  const endDrag = useCallback(() => {
-    dragRef.current.active = false;
-    document.body.classList.remove("select-none");
-    window.removeEventListener("mousemove", onDrag);
-    window.removeEventListener("mouseup", endDrag);
-  }, [onDrag]);
-
-  useEffect(() => {
-    return () => {
-      window.removeEventListener("mousemove", onDrag);
-      window.removeEventListener("mouseup", endDrag);
-      document.body.classList.remove("select-none");
-    };
-  }, [onDrag, endDrag]);
-
-  // ESC 닫기
+  // ESC로 닫기
   useEffect(() => {
     if (!open) return;
-    const handler = (e) => { if (e.key === "Escape") onClose?.(); };
+    const handler = (e) => {
+      if (e.key === "Escape") onClose?.();
+    };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [open, onClose]);
 
-  const handleBgClick = useCallback((e) => {
-    if (e.target === e.currentTarget) onClose?.();
-  }, [onClose]);
+  const visibleSheets = useMemo(() => {
+    if (!meta?.sheets) return [];
+    const preview = meta.previewBySheet || {};
+    return meta.sheets.filter((name) => Array.isArray(preview[name]) && preview[name].length > 0);
+  }, [meta]);
+
+  const headers = useMemo(
+    () => (previewAOA?.[0] || []).map((h) => String(h ?? "")),
+    [previewAOA]
+  );
+  const dataRows = useMemo(() => previewAOA?.slice(1) || [], [previewAOA]);
+
+  // react-window height 계산용 (부모 컨테이너 높이를 측정)
+  const listContainerRef = useRef(null);
+  const [listHeight, setListHeight] = useState(400);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const measure = () => {
+      if (listContainerRef.current) {
+        const h = listContainerRef.current.clientHeight;
+        if (h > 0) setListHeight(h);
+      }
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [open]);
 
   if (!open) return null;
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[2147483647] flex flex-col bg-black/60 backdrop-blur-sm"
-      onClick={handleBgClick}
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm"
+      onClick={(e) => e.target === e.currentTarget && onClose?.()}
     >
-      <div className="flex-1 flex items-center justify-center p-4" onClick={handleBgClick}>
-        <div
-          ref={panelRef}
-          className="w-[95vw] max-w-[1400px] h-[85vh] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 dark:border-slate-800">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-slate-500">편집 중인 시트</span>
-                <span className="px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 text-sm font-medium">
-                  {selectedSheet || "-"}
-                </span>
-                {(!meta?.sourceFile) && (
-                  <span className="ml-2 text-xs text-slate-500">(템플릿 작성)</span>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center shrink-0 gap-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-3 py-2 rounded-md border border-slate-300 dark:border-slate-700 text-sm bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800"
-              >
-                닫기
-              </button>
-              {!readOnly && (
+      <div
+        className="w-[96vw] h-[92vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-slate-200 ring-1 ring-slate-900/5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex-none px-6 py-4 border-b border-slate-200 bg-white flex items-center justify-between z-30">
+          <div className="flex items-center gap-6 overflow-hidden">
+            <h2 className="text-lg font-bold text-slate-800 shrink-0 flex items-center gap-2">
+              <span className="w-2 h-6 bg-indigo-500 rounded-full block"></span>
+              엑셀 편집기
+            </h2>
+
+            {/* Sheet Tabs */}
+            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar px-1 py-1">
+              {visibleSheets.map((name) => (
                 <button
+                  key={name}
                   type="button"
-                  onClick={onUpload}
-                  disabled={uploading}
-                  className={[
-                    "px-4 py-2 rounded-md text-sm font-semibold",
-                    uploading
-                      ? "bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-not-allowed"
-                      : "bg-emerald-600 hover:bg-emerald-700 text-white",
-                  ].join(" ")}
+                  onClick={() => onChangeSelectedSheet?.(name)}
+                  className={`px-4 py-1.5 text-sm font-medium rounded-full transition-all whitespace-nowrap ${
+                    selectedSheet === name
+                      ? "bg-indigo-50 text-indigo-700 shadow-sm ring-1 ring-indigo-200"
+                      : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                  }`}
                 >
-                  {uploading ? "업로드 중…" : "저장 및 업로드"}
+                  {name}
                 </button>
-              )}
+              ))}
             </div>
+
+            <div className="h-4 w-px bg-slate-200 mx-2"></div>
+            <span className="text-xs text-slate-400 font-mono">TOTAL: {dataRows.length} ROWS</span>
           </div>
 
-          {/* Body */}
-          <div className="flex-1 overflow-auto p-4">
-            <div className="border rounded-lg overflow-auto border-slate-200 dark:border-slate-700">
-              <div className="min-w-full overflow-auto">
-                <table className="text-sm border-separate border-spacing-0">
-                  <thead className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
-                    <tr>
-                      <th className="px-2 py-2 text-left sticky left-0 z-20 bg-slate-50 dark:bg-slate-800 bg-clip-padding transform-gpu w-12 border-r border-slate-300 dark:border-slate-700 relative after:content-[''] after:absolute after:top-0 after:right-[-1px] after:h-full after:w-[6px] after:pointer-events-none after:shadow-[inset_-6px_0_6px_-6px_rgba(0,0,0,0.12)]"></th>
-                      {(previewAOA?.[0] || []).map((cell, ci) => (
-                        <th key={ci} className="px-0 py-0 text-left font-semibold align-top">
-                          <div className="relative flex items-stretch border-r border-slate-200 dark:border-slate-700" style={{ width: colWidths[ci] ?? 160, minWidth: colWidths[ci] ?? 160 }}>
-                            <input
-                              value={cell ?? ""}
-                              onChange={(e) => onChangeCell?.(0, ci, e.target.value)}
-                              className="w-full bg-transparent outline-none font-semibold px-3 py-2 pr-8"
-                              disabled={readOnly}
-                            />
-                            <div className="absolute top-1/2 -translate-y-1/2 right-6">
-                              <HeaderHelp help={getColHelp(cell)} />
-                            </div>
-                            {/* resize handle */}
-                            {!readOnly && (
-                              <span
-                                className={[
-                                  "absolute top-0 right-0 h-full cursor-col-resize",
-                                  dragRef.current.active && dragRef.current.idx === ci
-                                    ? "w-3 bg-blue-500/10"
-                                    : "w-2 hover:w-3 hover:bg-blue-500/10",
-                                ].join(" ")}
-                                onMouseDown={(e) => startDrag(e, ci)}
-                                title="열 너비 조절"
-                                aria-label="열 너비 조절"
-                                role="separator"
-                                aria-orientation="vertical"
-                              />
-                            )}
-                          </div>
-                        </th>
-                      ))}
-                      <th className="px-2 py-2 text-center sticky right-0 z-20 bg-slate-50 dark:bg-slate-800 bg-clip-padding transform-gpu w-14 border-l border-slate-200 dark:border-slate-700 relative after:content-[''] after:absolute after:top-0 after:left-[-1px] after:h-full after:w-[6px] after:pointer-events-none after:shadow-[inset_6px_0_6px_-6px_rgba(0,0,0,0.12)]">
-                        *
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(previewAOA || []).slice(1).map((row, idx) => {
-                      const ri = idx + 1;
-                      return (
-                    <tr key={ri} className="hover:bg-slate-50/40 dark:hover:bg-slate-800/30">
-                      <td className="px-1 py-1 sticky left-0 z-10 bg-white dark:bg-slate-900 bg-clip-padding transform-gpu w-12 border-t border-r border-slate-200 dark:border-slate-700 relative after:content-[''] after:absolute after:top-0 after:right-[-1px] after:h-full after:w-[6px] after:pointer-events-none after:shadow-[inset_-6px_0_6px_-6px_rgba(0,0,0,0.12)]">
-                            {!readOnly && (
-                              <div className="flex items-center gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => onInsertRow?.(ri)}
-                                  className="px-2 py-1 text-xs rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
-                                  title="이 행 아래에 행 추가"
-                                >
-                                  +
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => onDeleteRow?.(ri)}
-                                  className="px-2 py-1 text-xs rounded border border-rose-300 dark:border-rose-700 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20"
-                                  title="이 행 삭제"
-                                >
-                                  -
-                                </button>
-                              </div>
-                            )}
-                          </td> 
-                          {(row || []).map((cell, ci) => (
-                            <td key={ci} className="px-0 py-0 align-top">
-                              <div className="px-3 py-2 border-t border-r border-slate-200 dark:border-slate-700" style={{ width: colWidths[ci] ?? 160, minWidth: colWidths[ci] ?? 160 }}>
-                                <input
-                                  value={cell ?? ""}
-                                  onChange={(e) => onChangeCell?.(ri, ci, e.target.value)}
-                                  className="w-full bg-transparent outline-none"
-                                  disabled={readOnly}
-                                />
-                              </div>
-                            </td>
-                          ))}
-                          <td className="px-2 py-1 sticky right-0 z-10 bg-white dark:bg-slate-900 bg-clip-padding transform-gpu w-14 border-t border-l border-slate-200 dark:border-slate-700 relative after:content-[''] after:absolute after:top-0 after:left-[-1px] after:h-full after:w-[6px] after:pointer-events-none after:shadow-[inset_6px_0_6px_-6px_rgba(0,0,0,0.12)]">
-                            <HelpCell help={getRowHelp(previewAOA, ri)} />
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    {!previewAOA?.length && (
-                      <tr><td className="px-3 py-6 text-center text-slate-400">표시할 데이터가 없습니다.</td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+          <div className="flex items-center gap-3 shrink-0">
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
+              title="닫기"
+            >
+              <XIcon className="w-5 h-5" />
+            </button>
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={onUpload}
+                disabled={uploading}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white shadow-md shadow-indigo-500/20 transition-all ${
+                  uploading
+                    ? "bg-slate-400 cursor-wait"
+                    : "bg-indigo-600 hover:bg-indigo-700 hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0"
+                }`}
+              >
+                {uploading ? (
+                  <span className="animate-pulse">저장 중...</span>
+                ) : (
+                  <>
+                    <SaveIcon className="w-4 h-4" />
+                    저장 및 업로드
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Body: Header Row + Virtualized Rows */}
+        <div className="flex-1 flex flex-col bg-white">
+          {/* 컬럼 헤더 라인 */}
+          <div className="flex border-b border-slate-200 bg-slate-50/80 backdrop-blur sticky top-0 z-20">
+            <div
+              className="w-[70px] flex-shrink-0 border-r border-slate-200 text-[10px] text-slate-400 font-normal flex items-center justify-center">
+              NO
             </div>
+            {headers.map((h, ci) => (
+              <div
+                key={ci}
+                className={`border-r border-slate-200 last:border-r-0 px-3 py-2 flex items-center justify-between ${widthClassForHeader(
+                  h
+                )}`}
+              >
+                <span className="text-xs font-bold text-slate-600 uppercase tracking-wide truncate">{h}</span>
+                <HeaderHelp help={getColHelp(h)} />
+              </div>
+            ))}
+          </div>
+
+          {/* react-window 리스트 컨테이너 */}
+          <div ref={listContainerRef} className="flex-1">
+            {dataRows.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-slate-400 text-sm">
+                표시할 데이터가 없습니다.
+              </div>
+            ) : (
+              <List
+                height={listHeight}
+                width="100%"
+                itemCount={dataRows.length}
+                itemSize={ROW_HEIGHT}
+                itemKey={(index) => index} // index 기반 (행 추가/삭제 시 성능/일관성 목적)
+                itemData={{
+                  previewAOA,
+                  headers,
+                  onChangeCell,
+                  onInsertRow,
+                  onDeleteRow,
+                  readOnly,
+                }}
+              >
+                {RowRenderer}
+              </List>
+            )}
           </div>
         </div>
       </div>

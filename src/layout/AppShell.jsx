@@ -1,9 +1,17 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import TopBar from './TopBar';
 import Sidebar from './Sidebar';
 
 export default function AppShell({ children, user }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    const link = document.createElement("link");
+    link.href = "https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined";
+    link.rel = "stylesheet";
+    document.head.appendChild(link);
+    return () => document.head.removeChild(link);
+  }, []);
 
   // 전체 네비 구성 AppShell에서 관리
   const nav = useMemo(
@@ -40,15 +48,6 @@ export default function AppShell({ children, user }) {
 
   return (
     <>
-    <style
-      dangerouslySetInnerHTML={{
-        __html: `
-    @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined');
-    .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
-    `,
-      }}
-    />
-
     <div className="flex min-h-screen bg-gray-50 dark:bg-gray-800 font-sans text-gray-900 dark:text-gray-100">
       {/* 모바일 오버레이 */}
       {sidebarOpen && (

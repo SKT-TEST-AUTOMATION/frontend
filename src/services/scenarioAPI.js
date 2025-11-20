@@ -28,6 +28,11 @@ export async function updateScenario(id, payload) {
   return res?.data?.data ?? res?.data;
 }
 
+export async function deleteScenario(id) {
+  const res = await api.delete(`scenarios/${id}?userId=1`);
+  return res?.data?.data ?? res?.data;
+}
+
 // 테스트 생성
 export async function createScenarioTest(payload) {
   const res = await api.post('scenarios/tests', payload);
@@ -52,5 +57,10 @@ export async function getScenarioTestResults(params = {}, signal) {
     signal,
     params: { page, size, sort },
   });
+  return res?.data?.data ?? res?.data;
+}
+
+export async function deleteScenarioTest(id) {
+  const res = await api.delete(`scenarios/tests/${id}?userId=1`);
   return res?.data?.data ?? res?.data;
 }

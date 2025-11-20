@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:pages": "vite build --mode pages",
+    "deploy:pages": "yarn build:pages && rm -rf docs && mkdir docs && cp -r dist/* docs/ && cp docs/index.html docs/404.html && git add docs && git commit -m \"[deploy] git pages update\"",
     "preview": "vite",
     "tw:print": "tailwindcss --print-config -c ./tailwind.config.js",
     "export": "vite build --mode reactsnap && npx react-snap",
@@ -21,6 +23,8 @@
     "react-dom": "18.3.1",
     "react-hook-form": "^7.63.0",
     "react-router-dom": "^7.9.1",
+    "react-window": "1.8.11",
+    "recharts": "^3.4.1",
     "recoil": "^0.7.7",
     "xlsx": "^0.18.5",
     "zod": "^4.1.11"
@@ -44,13 +48,16 @@
   "reactSnap": {
     "source": "dist",
     "crawl": false,
-    "inlineCss": false,    
+    "inlineCss": false,
     "port": 4567,
     "routes": [
       "/",
       "/testcases"
     ],
     "skipThirdPartyRequests": true,
-    "puppeteerArgs": ["--no-sandbox", "--disable-setuid-sandbox"]
+    "puppeteerArgs": [
+      "--no-sandbox",
+      "--disable-setuid-sandbox"
+    ]
   }
 }

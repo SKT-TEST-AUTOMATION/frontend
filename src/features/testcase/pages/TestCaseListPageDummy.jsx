@@ -1,68 +1,37 @@
-// src/features/testcases/pages/TestCaseListPage.jsx
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useNavigate, generatePath } from "react-router-dom";
 
 import PageHeader from "../../../shared/components/PageHeader";
 import PaginationBar from "../../../shared/components/PaginationBar";
 import fmtDT from "../../../shared/utils/dateUtils";
 
-import { getTestcases, deleteTestcase } from "../../../services/testcaseAPI";
-import { toErrorMessage, normalizePage } from "../../../services/axios";
-import { REQUEST_CANCELED_CODE } from "../../../constants/errors";
-import { useToast } from "../../../shared/hooks/useToast";
+// 예시
+const DUMMY_DATA = [
+  { id: 1, code: "TC-001", name: "로그인 시나리오", creatorName: "홍길동", createdAt: "2025-10-21", updatedAt: "2025-10-27" },
+  { id: 2, code: "TC-002", name: "국내여행 결제", creatorName: "김영희", createdAt: "2025-10-22", updatedAt: "2025-10-28" },
+  { id: 3, code: "TC-003", name: "글로벌여행 예약", creatorName: "이철수", createdAt: "2025-10-23", updatedAt: "2025-10-28" },
+];
 
-export default function TestCaseListPage() {
-  const { showToast, showError } = useToast();
+export default function TestCaseListPageDummy() {
   const navigate = useNavigate();
-
-  // -- 상태
-  const [loading, setLoading] = useState(true);
-  const [error, setError]   = useState(null);
 
   // 페이지네이션 상태
   const [data, setData] = useState({
-    content: [],
-    totalElements: 0,
+    content: DUMMY_DATA,
+    totalElements: DUMMY_DATA.length,
     totalPages: 1,
     number: 0,  // Spring 0-based
     size: 10,
   });
-  const [rows, setRows] = useState([]);
+  const [rows, setRows] = useState(DUMMY_DATA);
   const [page, setPage] = useState(1); // 화면 1-based
   const [size, setSize] = useState(10);
   const [deletingId, setDeletingId] = useState(null);
 
   // 삭제 핸들러
-  const handleDelete = async (row) => {
+  const handleDelete = (row) => {
     if (!window.confirm(`'${row.name}' 케이스를 삭제할까요? 이 작업은 되돌릴 수 없습니다.`)) return;
-    setDeletingId(row.id);
-    setError(null);
-    try {
-      await deleteTestcase(row.id);
-      showToast("success", "삭제 완료되었습니다.");
-
-      // Optimistic UI 업데이트
-      const nextRows = rows.filter((r) => r.id !== row.id);
-      setRows(nextRows);
-      setData((prev) => ({
-        ...prev,
-        totalElements: Math.max(0, (prev?.totalElements ?? 0) - 1),
-      }));
-
-      // 현재 페이지가 비면 이전 페이지로 이동 (자동 재조회)
-      if (nextRows.length === 0 && page > 1) {
-        setPage(page - 1);
-      } else {
-        const controller = new AbortController();
-        fetchTestCases(controller.signal);
-      }
-    } catch (err) {
-      if (err?.code == REQUEST_CANCELED_CODE) return;
-      const detailMessage = toErrorMessage(err);
-      showError("삭제에 실패했습니다.", detailMessage);
-    } finally {
-      setDeletingId(null);
-    }
+    alert('삭제되었습니다 (임시 동작)');
   };
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -81,32 +50,6 @@ export default function TestCaseListPage() {
   const goDetail = (id) => {
     navigate(generatePath("/testcases/:testCaseId/detail", { testCaseId: id }));
   };
-
-  // ── 목록 호출 (페이지네이션 파라미터 포함)
-  const fetchTestCases = useCallback(async (signal) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await getTestcases(
-        { page: page - 1, size, sort: "id,desc"},
-        signal
-      );
-      const norm = normalizePage(res);
-      setData(norm);
-      setRows(norm.content);
-    } catch (err) {
-      if (err?.code === REQUEST_CANCELED_CODE) return;
-      setError(toErrorMessage(err));
-    } finally {
-      setLoading(false);
-    }
-  }, [page, size]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    fetchTestCases(controller.signal);
-    return () => controller.abort();
-  }, [fetchTestCases]);
 
   // -- 테이블 헤더
   const HEADERS = [
@@ -171,28 +114,8 @@ export default function TestCaseListPage() {
             ))}
           </div>
 
-          {/* 로딩 */}
-          {loading && (
-            <div className="divide-y divide-gray-200 dark:divide-gray-700">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="grid grid-cols-12 gap-4 px-5 min-h-[52px] py-3.5 items-center">
-                  {[2,3,2,2,2,1].map((span, idx) => (
-                    <div key={idx} className={`col-span-${span}`}>
-                      <div className="h-3.5 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* 에러 */}
-          {!loading && error && (
-            <div className="px-5 py-6 text-sm text-rose-600 dark:text-rose-300">{error}</div>
-          )}
-
           {/* 빈 상태 */}
-          {!loading && !error && filtered.length === 0 && (
+          {filtered.length === 0 && (
             <div className="flex flex-col items-center justify-center py-14 text-sm">
               <div className="w-14 h-14 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-3.5">
                 <span className="material-symbols-outlined text-gray-400 text-xl">list_alt</span>
@@ -214,7 +137,7 @@ export default function TestCaseListPage() {
           )}
 
           {/* 목록 */}
-          {!loading && !error && filtered.length > 0 && (
+          {filtered.length > 0 && (
             <div className="divide-y divide-gray-200 dark:divide-gray-700">
               {filtered.map((row) => (
                 <div
@@ -274,12 +197,11 @@ export default function TestCaseListPage() {
                     </button>
                     <button
                       onClick={() => handleDelete(row)}
-                      disabled={deletingId === row.id}
-                      className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-colors disabled:opacity-50"
+                      className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-colors"
                       title="삭제"
                     >
                       <span className="material-symbols-outlined text-base leading-none">
-                        {deletingId === row.id ? "hourglass_top" : "delete"}
+                        delete
                       </span>
                     </button>
                   </div>

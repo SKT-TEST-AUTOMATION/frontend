@@ -1,16 +1,10 @@
-// src/features/devices/pages/DeviceFarmPage.jsx
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRecoilValue } from "recoil";
 
+
+import { useEffect, useState } from "react";
 import PageHeader from "../../shared/components/PageHeader";
-import { deviceFarmState } from "./state/deviceFarmState";
-import { useDeviceFarmPolling } from "./hooks/useDeviceFarm";
-import { api, normalizePage, toErrorMessage } from "../../services/axios";
-import { createDevice, getDevices } from "../../services/deviceAPI";
-import { REQUEST_CANCELED_CODE } from "../../constants/errors";
 
 // ──────────────────────────────────────────────────────────
-// 간단한 상태/뱃지
+// 간단한 상태/뱃지 (원본과 동일)
 // ──────────────────────────────────────────────────────────
 function AvailabilityBadge({ available, offline, busy }) {
   let text = "UNAVAILABLE";
@@ -43,7 +37,7 @@ function DeviceCard({ d, right }) {
             {d.connectedIp || d.appiumHost}:{d.appiumPort}{d.basePath || ""}
           </div>
         )}
-        {d.systemPort && (
+        {d.systemPort != null && (
           <div className ="mt-1 text-[11px] text-gray-500 dark:text-gray-400 truncate">
             system port: {d.systemPort}
           </div>
@@ -58,44 +52,34 @@ function DeviceCard({ d, right }) {
 }
 
 // ──────────────────────────────────────────────────────────
-// 등록 모달: 이름 입력 → POST /api/v1/devices
+// 등록 모달 (더미: API 호출 없이 onSaved 콜백만 실행)
 // ──────────────────────────────────────────────────────────
 function RegisterModal({ open, onClose, initial, onSaved }) {
   const [name, setName] = useState(initial?.name || "");
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
 
   useEffect(() => {
     if (open) {
       setName(initial?.name || "");
-      setError(null);
     }
   }, [open, initial]);
 
   if (!open) return null;
 
-  const displayAppiumPort = initial?.appiumPort ?? 4723; // UI 표시용 (저장 기본값과 동일)
+  const displayAppiumPort = initial?.appiumPort ?? 4723; // UI 표시용
   const displaySystemPort = initial?.systemPort ?? null; // null이면 미지정
 
   const submit = async () => {
     setSaving(true);
-    setError(null);
-    try {
-      await createDevice({
-        udid: initial.udid,
-        name: name?.trim() || initial.udid,
-        deviceOsType: (initial.platform || "").toUpperCase() === "IOS" ? "IOS" : "ANDROID",
-        systemPort: initial.systemPort ?? null,
-        appiumPort: initial.appiumPort ?? 4723,
-        connectedIp: initial.connectedIp ?? initial.connectedUrl ?? initial.appiumHost ?? "127.0.0.1",
-      });
-      onSaved?.();
-      onClose?.();
-    } catch (e) {
-      setError(e?.response?.data?.message || e?.message || "저장 실패");
-    } finally {
-      setSaving(false);
-    }
+    // 실제 API 호출 대신 더미 저장: 부모로 데이터 전달
+    const payload = {
+      ...initial,
+      name: name?.trim() || initial.udid,
+      platform: (initial.platform || "").toUpperCase().includes("IOS") ? "IOS" : "ANDROID",
+    };
+    onSaved?.(payload);
+    setSaving(false);
+    onClose?.();
   };
 
   return (
@@ -110,11 +94,11 @@ function RegisterModal({ open, onClose, initial, onSaved }) {
         <div className="px-5 py-4 space-y-3">
           <div className="text-xs text-gray-500 dark:text-gray-400">* {initial?.platform} DEVICE </div>
           <label className="block text-sm text-gray-700 dark:text-gray-200">UDID</label>
-            <input
-                value={initial?.udid}
-                readOnly
-                className="h-10 w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/40 px-3 text-sm text-gray-700 dark:text-gray-300 outline-none"
-            />
+          <input
+            value={initial?.udid}
+            readOnly
+            className="h-10 w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/40 px-3 text-sm text-gray-700 dark:text-gray-300 outline-none"
+          />
           <label className="block text-sm text-gray-700 dark:text-gray-200">이름</label>
           <input
             value={name}
@@ -122,8 +106,6 @@ function RegisterModal({ open, onClose, initial, onSaved }) {
             className="h-11 w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-blue-500/50"
             placeholder="예: Galaxy A12 #1"
           />
-
-          {/* 연결 포트 표시 (읽기 전용) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
             <div>
               <label className="block text-sm text-gray-700 dark:text-gray-200">Appium Port</label>
@@ -143,8 +125,6 @@ function RegisterModal({ open, onClose, initial, onSaved }) {
               />
             </div>
           </div>
-
-          {error && <div className="text-sm text-rose-600 dark:text-rose-300">{error}</div>}
         </div>
         <div className="flex items-center justify-end gap-2 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 px-5 py-3">
           <button onClick={onClose} className="rounded-xl border border-gray-300 dark:border-gray-600 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700">
@@ -164,92 +144,90 @@ function RegisterModal({ open, onClose, initial, onSaved }) {
 }
 
 // ──────────────────────────────────────────────────────────
-// 페이지
+// 더미 페이지 (API 없이 동작)
 // ──────────────────────────────────────────────────────────
-export default function DeviceFarmPage() {
-  // Appium 폴링 (탭이 비활성화되면 자동 스킵됨)
-  const { refresh } = useDeviceFarmPolling({
-    url: "http://127.0.0.1:4723/device-farm/api/device",
-    intervalMs: 4000,
-    appiumHost: "127.0.0.1",
-    appiumPort: 4723,
-    basePath: "/",
-  });
-  const { loading: dfLoading, error: dfError, items: dfItems = [], lastUpdatedAt } = useRecoilValue(deviceFarmState);
-
-  // 백엔드 등록 목록
-  const [beLoading, setBeLoading] = useState(true);
-  const [beError, setBeError] = useState(null);
-  const [beItems, setBeItems] = useState([]); // [{udid, name, platform, ...}]
-
-  const fetchBackend = useCallback(async (signal) => {
-    setBeLoading(true);
-    setBeError(null);
-    try {
-      // 예: /api/v1/devices?size=1000
-      const res = await getDevices(
-        { page: 0, size: 100, sort:"udid,desc"},
-        signal
-      );
-      const data = normalizePage(res);
-      setBeItems(data.content);
-    } catch (err) {
-      if (err?.code === REQUEST_CANCELED_CODE) return;
-      setBeError(toErrorMessage(err));
-    } finally {
-      setBeLoading(false);
-    }
+export default function DeviceFarmPageDummy() {
+  // "Appium 동기화" 표기를 위한 시간 표시만 더미로 갱신
+  const [lastUpdatedAt, setLastUpdatedAt] = useState(Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setLastUpdatedAt(Date.now()), 5000);
+    return () => clearInterval(t);
   }, []);
 
-  useEffect(() => { 
-    const controller = new AbortController();
-    fetchBackend(controller.signal); 
-  }, [fetchBackend]);
+  // 1) 등록된 기기 더미 2개
+  const [beItems, setBeItems] = useState([
+    {
+      udid: "R59R701TDGL",
+      name: "Galaxy A12",
+      platform: "ANDROID",
+      available: true,
+      offline: false,
+      busy: false,
+      appiumHost: "127.0.0.1",
+      appiumPort: 4723,
+      systemPort: 8200,
+      basePath: "/",
+    },
+    {
+      udid: "R29R293SJTN",
+      name: "Galaxy 폴드7",
+      platform: "ANDROID",
+      available: false,
+      offline: false,
+      busy: true,
+      appiumHost: "127.0.0.1",
+      appiumPort: 4723,
+      systemPort: 8201,
+      basePath: "/",
+    },
+  ]);
 
-  // 매칭 맵 생성 (udid 기준)
-  const dfByUdid = useMemo(() => {
-    const m = new Map();
-    for (const d of dfItems) m.set(d.udid, d);
-    return m;
-  }, [dfItems]);
+  // 2) 미등록 기기 더미 1개
+  const [unregistered, setUnregistered] = useState([
+    {
+      udid: "R59R702XYZL",
+      name: "s25",
+      platform: "ANDROID",
+      available: true,
+      offline: false,
+      busy: false,
+      appiumHost: "127.0.0.1",
+      appiumPort: 4723,
+      systemPort: 8202,
+      basePath: "/",
+      _unregistered: true,
+    },
+  ]);
 
-  // 등록된 기기(백엔드 기준) 배열: df 상태 덧씌움
-  const registered = useMemo(() => {
-    return beItems.map((b) => {
-      const live = dfByUdid.get(b.udid);
-      return {
-        udid: b.udid,
-        name: b.name || live?.name || b.udid,
-        platform: (b.platform || live?.platform || "").toUpperCase().includes("IOS") ? "IOS" : "ANDROID",
-        available: !!live?.available,
-        offline: !!live?.offline,
-        busy: !!live?.busy,
-        // 표시용
-        appiumHost: live?.appiumHost,
-        appiumPort: live?.appiumPort,
-        systemPort: live?.systemPort,
-        basePath: live?.basePath,
-      };
-    });
-  }, [beItems, dfByUdid]);
-
-  // 미등록 기기(폴링엔 있지만 백엔드엔 없음)
-  const unregistered = useMemo(() => {
-    const setBE = new Set(beItems.map((b) => b.udid));
-    return dfItems
-      .filter((d) => !setBE.has(d.udid))
-      .map((d) => ({
-        ...d,
-        name: d.name || d.udid,
-        _unregistered: true,
-      }));
-  }, [beItems, dfItems]);
-
-  // 등록 모달
+  // 3) 등록 버튼 → 모달 열기
   const [regOpen, setRegOpen] = useState(false);
   const [regInitial, setRegInitial] = useState(null);
-  const openRegister = (d) => { setRegInitial(d); setRegOpen(true); };
-  const onSaved = async () => { await fetchBackend(); };
+  const openRegister = (d) => {
+    setRegInitial(d);
+    setRegOpen(true);
+  };
+
+  // 모달 저장 시: 더미로 등록 처리(목록 이동)
+  const handleSaved = (payload) => {
+    // 미등록 목록에서 제거
+    setUnregistered((prev) => prev.filter((x) => x.udid !== payload.udid));
+    // 등록 목록에 추가 (상태는 사용 가능한 것으로 기본 반영)
+    setBeItems((prev) => [
+      ...prev,
+      {
+        udid: payload.udid,
+        name: payload.name || payload.udid,
+        platform: payload.platform,
+        available: true,
+        offline: false,
+        busy: false,
+        appiumHost: payload.appiumHost || payload.connectedIp || "127.0.0.1",
+        appiumPort: payload.appiumPort ?? 4723,
+        systemPort: payload.systemPort ?? null,
+        basePath: payload.basePath || "/",
+      },
+    ]);
+  };
 
   return (
     <>
@@ -259,25 +237,14 @@ export default function DeviceFarmPage() {
           subtitle={lastUpdatedAt ? `Appium 동기화: ${new Date(lastUpdatedAt).toLocaleTimeString()}` : "Appium 동기화 대기"}
         />
 
-        {/* 에러 알림 */}
-        {(dfError || beError) && (
-          <div className="mb-2 text-sm rounded-lg p-3 border"
-               style={{borderColor: 'rgb(254 202 202)', background: 'rgb(254 242 242)', color: 'rgb(185 28 28)'}}>
-            {dfError && <div>Appium 서버를 확인해주세요. </div>}
-            {beError && <div>등록 목록 불러오기 실패: {beError}</div>}
-          </div>
-        )}
-
         {/* 등록된 기기 */}
         <section className="space-y-3">
           <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-200">등록된 기기</h2>
-          {beLoading ? (
-            <div className="text-gray-500 dark:text-gray-400">불러오는 중…</div>
-          ) : registered.length === 0 ? (
+          {beItems.length === 0 ? (
             <div className="text-gray-500 dark:text-gray-400">등록된 기기가 없습니다.</div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
-              {registered.map((d) => (
+              {beItems.map((d) => (
                 <DeviceCard key={d.udid} d={d} />
               ))}
             </div>
@@ -287,9 +254,7 @@ export default function DeviceFarmPage() {
         {/* 미등록 기기 */}
         <section className="space-y-3">
           <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-200">미등록 기기</h2>
-          {dfLoading ? (
-            <div className="text-gray-500 dark:text-gray-400">Appium에서 불러오는 중…</div>
-          ) : unregistered.length === 0 ? (
+          {unregistered.length === 0 ? (
             <div className="text-gray-500 dark:text-gray-400">미등록 상태의 연결 기기가 없습니다.</div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
@@ -313,7 +278,7 @@ export default function DeviceFarmPage() {
       </div>
 
       {/* 등록 모달 */}
-      <RegisterModal open={regOpen} onClose={() => setRegOpen(false)} initial={regInitial} onSaved={onSaved} />
+      <RegisterModal open={regOpen} onClose={() => setRegOpen(false)} initial={regInitial} onSaved={handleSaved} />
     </>
   );
 }
