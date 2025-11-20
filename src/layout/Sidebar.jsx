@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 
 function Chevron({ open }) {
@@ -40,7 +40,7 @@ const getInitials = (name = '') => {
 };
 
 const buildDefaultNav = () => ({
-  primary: [{ label: '대시보드', href: '/dashboard', icon: 'space_dashboard' }], // 대시보드 아이콘
+  primary: [{ label: '대시보드', href: '/dashboard', icon: 'space_dashboard' }],
   testCase: [
     { label: '케이스 목록', href: '/testcases' },
     { label: '케이스 등록', href: '/testcases/new' },
@@ -54,7 +54,6 @@ const buildDefaultNav = () => ({
   runResult: [
     { label: '테스트 결과 목록', href: '/results' },
     { label: '이슈 관리', href: '/results/issues' },
-    { label: '결과 보고서', href: '/results/reports' },
   ],
   registry: [
     // { label: '테스트 레지스트리', href: '/registry' },
@@ -76,6 +75,7 @@ export default function Sidebar({ open, onClose, user = {} }) {
 
   const nav = useMemo(buildDefaultNav, []);
 
+  // 섹션 접힘 상태 (효과들보다 위에 선언! TDZ 회피)
   const [isOpen, setIsOpen] = useState({
     testCase: true,
     run: false,
@@ -87,9 +87,7 @@ export default function Sidebar({ open, onClose, user = {} }) {
     setIsOpen((prev) => ({ ...prev, [key]: !prev[key] }));
 
   const goHome = () => {
-    const fallback = '/dashboard';
-    const target = nav?.primary?.[0]?.href ?? fallback;
-    navigate(target);
+    navigate('/');
     onClose?.();
   };
 
@@ -196,62 +194,144 @@ export default function Sidebar({ open, onClose, user = {} }) {
     );
   };
 
+  // ── 스크롤 섀도/상태 영속화/경로 기반 자동 펼침 ──
+  const navRef = useRef(null);
+  const [scroll, setScroll] = useState({ atTop: true, atBottom: false });
+
+  // localStorage에서 열림 상태 로드
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('qone.sidebar.isOpen');
+      if (raw) setIsOpen((prev) => ({ ...prev, ...JSON.parse(raw) }));
+    } catch (_) {}
+     
+  }, []);
+
+  // 열림 상태 저장
+  useEffect(() => {
+    try {
+      localStorage.setItem('qone.sidebar.isOpen', JSON.stringify(isOpen));
+    } catch (_) {}
+  }, [isOpen]);
+
+  // 현재 경로에 해당하는 섹션 자동 펼침
+  useEffect(() => {
+    const keys = ['testCase', 'run', 'runResult', 'registry'];
+    for (const key of keys) {
+      const items = nav?.[key] ?? [];
+      const active = items.some((it) => pathname === it.href || pathname.startsWith(it.href + '/'));
+      if (active) {
+        setIsOpen((prev) => ({ ...prev, [key]: true }));
+        break;
+      }
+    }
+  }, [pathname, nav]);
+
+  // 스크롤 위치에 따른 섀도 표시
+  useEffect(() => {
+    const el = navRef.current;
+    if (!el) return;
+    const update = () => {
+      const atTop = el.scrollTop <= 0;
+      const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
+      setScroll({ atTop, atBottom });
+    };
+    update();
+    el.addEventListener('scroll', update, { passive: true });
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener('scroll', update);
+      ro.disconnect();
+    };
+  }, []);
+
   const content = useMemo(
     () => (
-      <div className="flex h-full w-64 flex-col bg-white dark:bg-slate-900 border-r border-slate-200/60 dark:border-slate-700/60 shadow-lg">
-        {/* Brand */}
+      <div className="flex h-full w-64 flex-col min-h-0 bg-white dark:bg-slate-900 border-r border-slate-200/60 dark:border-slate-700/60 shadow-lg">
+        {/* Brand (리디자인) */}
         <div
-          className="flex cursor-pointer items-center px-6 h-16 border-b border-slate-100 dark:border-slate-800 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-slate-800 dark:to-slate-700"
+          className="relative flex cursor-pointer items-center gap-3 px-5 h-16 flex-none border-b border-slate-100 dark:border-slate-800 bg-white/90 dark:bg-slate-900/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-slate-900/60"
           onClick={goHome}
           onKeyDown={onBrandKeyDown}
           role="button"
           tabIndex={0}
-          aria-label="대시보드로 이동"
+          aria-label="랜딩 화면으로 이동"
         >
-          <div>
-            <h1 className="text-lg font-bold text-slate-800 dark:text-slate-100">Q-One</h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400 -mt-0.5">QA Test Management</p>
+          <div className="relative">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-cyan-500 shadow-md flex items-center justify-center">
+              <span className="text-white font-extrabold tracking-tight">Q</span>
+            </div>
+            <div className="absolute -right-1 -bottom-1 px-1.5 py-0.5 rounded-full text-[10px] leading-none bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200 border border-blue-200/70 dark:border-blue-700/50">
+              One
+            </div>
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-base font-extrabold text-slate-900 dark:text-slate-100 tracking-tight leading-none whitespace-nowrap">
+              <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500">Q-One</span>
+            </h1>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-none whitespace-nowrap">QA Test Management</p>
           </div>
         </div>
 
-        {/* Nav */}
-        <nav className="flex-1 px-3 py-4 space-y-3 overflow-y-auto">
-          <div className="px-3 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-            메인 메뉴
-          </div>
+        {/* Nav (스크롤 섀도 포함) */}
+        <div className="relative flex-1 min-h-0">
+          <nav ref={navRef} className="px-3 py-4 space-y-3 overflow-y-auto overscroll-contain h-full">
+            <div className="px-3 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              메인 메뉴
+            </div>
 
-          {/* 대시보드(Primary) — 아이콘 포함, 선택 시 블루/비선택 시 뉴트럴 */}
-          {(nav?.primary ?? []).map((item) => (
-            <NavLink
-              key={item.href}
-              to={item.href}
-              end
-              onClick={onClose}
-              className={({ isActive }) => [topBase, isActive ? topActive : topNeutral].join(' ')}
-            >
-              {({ isActive }) =>
-                renderWithIndicator(
-                  <span className="flex items-center">
-                    {item.icon && <SectionIcon name={item.icon} active={isActive} />}
-                    <span>{item.label}</span>
-                  </span>,
-                  isActive
-                )
-              }
-            </NavLink>
-          ))}
+            {/* 대시보드(Primary) — 아이콘 포함, 선택 시 블루/비선택 시 뉴트럴 */}
+            {(nav?.primary ?? []).map((item) => (
+              <NavLink
+                key={item.href}
+                to={item.href}
+                end
+                onClick={onClose}
+                className={({ isActive }) => [topBase, isActive ? topActive : topNeutral].join(' ')}
+              >
+                {({ isActive }) =>
+                  renderWithIndicator(
+                    <span className="flex items-center">
+                      {item.icon && <SectionIcon name={item.icon} active={isActive} />}
+                      <span>{item.label}</span>
+                    </span>,
+                    isActive
+                  )
+                }
+              </NavLink>
+            ))}
 
-          {/* 드롭다운 섹션들 */}
-          <DropdownSection sectionKey="testCase" />
-          <DropdownSection sectionKey="run" />
-          <DropdownSection sectionKey="runResult" />
-          <DropdownSection sectionKey="registry" />
+            {/* 드롭다운 섹션들 */}
+            <DropdownSection sectionKey="testCase" />
+            <DropdownSection sectionKey="run" />
+            <DropdownSection sectionKey="runResult" />
+            <DropdownSection sectionKey="registry" />
 
-          <div className="h-px bg-slate-100 dark:bg-slate-800 mx-3 my-2" />
-        </nav>
+            <div className="h-px bg-slate-100 dark:bg-slate-800 mx-3 my-2" />
+          </nav>
+
+          {/* Scroll shadows */}
+          <div
+            className={[
+              'pointer-events-none absolute top-0 left-0 right-0 h-6',
+              'bg-gradient-to-b from-white/90 to-transparent dark:from-slate-900/90',
+              'transition-opacity',
+              scroll.atTop ? 'opacity-0' : 'opacity-100',
+            ].join(' ')}
+          />
+          <div
+            className={[
+              'pointer-events-none absolute bottom-0 left-0 right-0 h-6',
+              'bg-gradient-to-t from-white/90 to-transparent dark:from-slate-900/90',
+              'transition-opacity',
+              scroll.atBottom ? 'opacity-0' : 'opacity-100',
+            ].join(' ')}
+          />
+        </div>
 
         {/* User Profile Footer */}
-        <div className="p-4 border-t border-slate-200/60 dark:border-slate-700/60 bg-slate-50/50 dark:bg-slate-800/50">
+        <div className="p-4 flex-none border-t border-slate-200/60 dark:border-slate-700/60 bg-slate-50/50 dark:bg-slate-800/50">
           <div className="flex items-center gap-3">
             <div className="relative">
               <div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full w-10 h-10 flex items-center justify-center text-white font-semibold shadow-lg">
@@ -274,7 +354,7 @@ export default function Sidebar({ open, onClose, user = {} }) {
         </div>
       </div>
     ),
-    [isOpen, pathname]
+    [isOpen, pathname, scroll] // scroll 디펜던시 포함
   );
 
   return (

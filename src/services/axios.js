@@ -7,7 +7,7 @@ export const api = axios.create({
 
 export function toErrorMessage(err, fallback = "요청에 실패했습니다.") {
   if (err?.code === "ERR_CANCELED") return "요청이 취소되었습니다.";
-  if (err?.response?.data?.message) return err.response.data.message;
+  if (err?.response?.data?.error?.message) return err.response.data.error.message;
   if (err?.response?.status) return `${err.response.status} ${err.response.statusText}`;
   return err?.message || fallback;
 }

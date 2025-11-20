@@ -83,8 +83,7 @@ export default function DeviceSelectModal({ onClose, onConfirm }) {
             className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-60 transition-all"
             disabled={!selectedDevice}
           >
-            <span className="material-symbols-outlined text-lg">play_arrow</span>
-            테스트 실행
+            확인
           </button>
         </div>
       </div>

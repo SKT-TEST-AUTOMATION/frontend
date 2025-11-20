@@ -10,9 +10,8 @@ import { deviceFarmState } from "../state/deviceFarmState";
  */
 function mapDfDevice(
   raw,
-  { appiumHost = "127.0.0.1", appiumPort = 4723, basePath = "/wd/hub" } = {}
+  { appiumHost = "127.0.0.1", appiumPort = 4723, basePath = "/wd/hub", preferConfigHost = false } = {}
 ) {
-  // 1) host 파싱 (예: "http://172.16.17.205:4723")
   let hostFromDf = {
     protocol: "http:",
     hostname: appiumHost,
@@ -21,7 +20,7 @@ function mapDfDevice(
   };
 
   try {
-    if (raw.host) {
+    if (!preferConfigHost && raw.host) {
       const u = new URL(raw.host);
       hostFromDf = {
         protocol: u.protocol || "http:",
@@ -38,41 +37,36 @@ function mapDfDevice(
   const udid = raw.udid;
   const name = raw.name;
 
-  // 2) 플랫폼
   const p = (raw.platform || raw.os || "").toLowerCase();
   const platform = p.includes("ios") ? "IOS" : p.includes("android") ? "ANDROID" : "UNKNOWN";
 
-  // 3) 상태
   const offline = raw.offline === true;
   const busy = raw.busy === true;
   const blocked = raw.userBlocked === true || raw.blocked === true;
   const available = !offline && !busy && !blocked;
 
-  // 4) 포트/치수
   const systemPort = raw.systemPort ?? raw.wdaLocalPort ?? null;
   const width = raw.width ? Number(raw.width) : undefined;
   const height = raw.height ? Number(raw.height) : undefined;
 
-  // ★ origin(프로토콜+호스트+포트)과 url(베이스패스까지) 생성
-  const origin = `${hostFromDf.protocol}//${hostFromDf.hostname}${hostFromDf.port ? `:${hostFromDf.port}` : ""}`;
+  const origin = `${hostFromDf.protocol}//${hostFromDf.hostname}${
+    hostFromDf.port ? `:${hostFromDf.port}` : ""
+  }`;
   const urlWithBase = `${origin}${hostFromDf.pathname || "/wd/hub"}`;
 
   return {
-    // 식별/표시
     udid,
     name,
     platform,
 
-    // 상태
     offline,
     busy,
     available,
     blocked,
     state: raw.state,
 
-    // 연결 정보 (실행 DTO/등록에 사용)
-    connectedIp: origin,            // 예: "http://172.16.17.205:4723"
-    connectedUrl: urlWithBase,      // 예: "http://172.16.17.205:4723/wd/hub"
+    connectedIp: origin,       // 예: "http://172.16.17.205:4723"
+    connectedUrl: urlWithBase, // 예: "http://172.16.17.205:4723/wd/hub"
     appiumHost: hostFromDf.hostname,
     appiumPort: Number(hostFromDf.port) || 4723,
     basePath: hostFromDf.pathname || "/wd/hub",
@@ -80,33 +74,53 @@ function mapDfDevice(
     systemPort,
     adbPort: raw.adbPort ?? null,
 
-    // 부가정보
     realDevice: !!raw.realDevice,
     deviceType: raw.deviceType,
     width,
     height,
 
-    // 원본
     _raw: raw,
   };
 }
 
+/**
+ * useDeviceFarmPolling
+ *
+ * @param {Object} options
+ * @param {"local"|"remote"} options.mode  - "local"이면 127.0.0.1:4723 기준 고정
+ * @param {string} [options.url]           - mode === "remote" 일 때 DF 조회 URL
+ * @param {number} [options.intervalMs]
+ * @param {string} [options.appiumHost]    - mode === "remote" 에서 사용
+ * @param {number} [options.appiumPort]    - mode === "remote" 에서 사용
+ * @param {string} [options.basePath]
+ */
 export function useDeviceFarmPolling({
-  url = "http://127.0.0.1:4723/device-farm/api/device",
+  mode = "local", // ★ 기본은 로컬 모드
+  url,
   intervalMs = 4000,
-  appiumHost = "127.0.0.1",
-  appiumPort = 4723,
-  basePath = "/wd/hub", // ★ 기본을 /wd/hub로
+  appiumHost,
+  appiumPort,
+  basePath = "/wd/hub",
 } = {}) {
   const set = useSetRecoilState(deviceFarmState);
   const timerRef = useRef(null);
 
-  // 서버를 한 번 불러와서 전역 상태에 반영
+  // ★ 모드에 따라 실제 사용할 값 결정
+  const isLocal = mode === "local";
+
+  const effectiveUrl = isLocal
+    ? "http://127.0.0.1:4723/device-farm/api/device"
+    : url || "http://127.0.0.1:4723/device-farm/api/device"; // fallback
+
+  const effectiveHost = isLocal ? "127.0.0.1" : appiumHost || "127.0.0.1";
+  const effectivePort = isLocal ? 4723 : appiumPort || 4723;
+  const effectiveBasePath = basePath || "/wd/hub";
+
   const fetchOnce = useCallback(
     async (signal) => {
       set((s) => ({ ...s, loading: true, error: null }));
       try {
-        const res = await fetch(url, { signal });
+        const res = await fetch(effectiveUrl, { signal });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
 
@@ -118,18 +132,36 @@ export function useDeviceFarmPolling({
           ? data.items
           : [];
 
-        const mapped = arr.map((d) => mapDfDevice(d, { appiumHost, appiumPort, basePath }));
-        set({ loading: false, error: null, lastUpdatedAt: Date.now(), items: mapped });
+        const mapped = arr.map((d) =>
+          mapDfDevice(d, {
+            appiumHost: effectiveHost,
+            appiumPort: effectivePort,
+            basePath: effectiveBasePath,
+            // local 모드에서는 DF가 내려주는 host(예: 198.x.x.x)를 무시하고
+            // 설정값(127.0.0.1 등)을 강제로 사용
+            preferConfigHost: isLocal,
+          })
+        );
+
+        set({
+          loading: false,
+          error: null,
+          lastUpdatedAt: Date.now(),
+          items: mapped,
+        });
       } catch (e) {
         console.log(e);
-        set((s) => ({ ...s, loading: false, error: e.message || "Failed to fetch device farm" }));
+        set((s) => ({
+          ...s,
+          loading: false,
+          error: e.message || "Failed to fetch device farm",
+        }));
       }
     },
-    [url, appiumHost, appiumPort, basePath, set]
+    [effectiveUrl, effectiveHost, effectivePort, effectiveBasePath, set, isLocal]
   );
 
   const start = useCallback(() => {
-    // 기존 타이머/요청 정리
     if (timerRef.current?.id) clearInterval(timerRef.current.id);
     timerRef.current?.ctrl?.abort?.();
 
@@ -139,7 +171,6 @@ export function useDeviceFarmPolling({
     timerRef.current = {
       ctrl,
       id: setInterval(() => {
-        // 현재 탭이 비활성화면 요청 스킵
         if (typeof document !== "undefined" && document.hidden) return;
         fetchOnce(ctrl.signal);
       }, intervalMs),
@@ -157,7 +188,6 @@ export function useDeviceFarmPolling({
     return stop;
   }, [start, stop]);
 
-  // 수동 새로고침: 독립 컨트롤러로 안전 호출
   const refresh = useCallback(() => {
     const c = new AbortController();
     return fetchOnce(c.signal);

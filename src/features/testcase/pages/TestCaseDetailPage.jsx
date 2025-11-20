@@ -121,8 +121,12 @@ export default function TestCaseDetailPage() {
   return (
     <div className="flex flex-col gap-6 p-6 bg-gray-50 dark:bg-gray-900 min-h-screen text-sm">
       <PageHeader
-        title="테스트 케이스 상세"
+        title="테스트 케이스"
         subtitle={form ? `[${form.code}] ${form.name}` : ""}
+        breadcrumbs={[
+          { label: "테스트 케이스", to: "/testcases" },
+          { label: "상세" },
+        ]}
         actions={actions}
       />
 
