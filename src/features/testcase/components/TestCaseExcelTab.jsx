@@ -1,4 +1,4 @@
-import React, { useRef, useState, useMemo } from "react";
+import React, { useRef, useState, useMemo, useEffect } from 'react';
 import { downloadFile } from "../../../shared/utils/fileUtils";
 import ExcelPreviewEditor from "./ExcelPreviewEditor";
 import { useNavigate } from "react-router-dom";
@@ -32,13 +32,13 @@ const ExpandIcon = ({ className }) => (
 );
 
 // ──────────────────────────────────────────────────────────────────────────────
-// 메인 컴포넌트: TestCaseExcelTab (Modern UI)
+// 메인 컴포넌트: TestCaseExcelTab
 // ──────────────────────────────────────────────────────────────────────────────
 export default function TestCaseExcelTab({ form, testCaseId, excelFileName, readOnly = false }) {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
-  const [dragOver, setDragOver] = useState(false);
-  const [editorOpen, setEditorOpen] = useState(false);
+  const [dragOver, setdragOver] = useState(false);
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
 
   const PREVIEW_ROW_LIMIT = 50;
 
@@ -57,62 +57,69 @@ export default function TestCaseExcelTab({ form, testCaseId, excelFileName, read
   const displayRows = useMemo(() => {
     return dataRows.slice(0, PREVIEW_ROW_LIMIT);
   }, [dataRows]);
-
   const hiddenRowCount = Math.max(0, dataRows.length - PREVIEW_ROW_LIMIT);
 
   const openEditor = async () => {
+    console.log('openEditor');
     if (!selectedSheet) return;
     if (!file) {
       const aoa = meta?.previewBySheet?.[selectedSheet] || previewAOA || [];
       setFullBySheet((prev) => ({ ...prev, [selectedSheet]: aoa }));
       setPreviewAOA(aoa);
-      setEditorOpen(true);
+      setIsEditorOpen(true);
       return;
     }
     const cached = fullBySheet[selectedSheet];
     if (cached && Array.isArray(cached) && cached.length > 0) {
       setPreviewAOA(cached);
-      setEditorOpen(true);
+      setIsEditorOpen(true);
       return;
     }
     try {
       const fullAOA = await readSheetAOA(file, selectedSheet, { maxRows: Infinity, trimCells: true });
       setFullBySheet((prev) => ({ ...prev, [selectedSheet]: fullAOA }));
       setPreviewAOA(fullAOA);
-      setEditorOpen(true);
+      setIsEditorOpen(true);
     } catch (err) {
       console.error(err);
       const fallback = meta?.previewBySheet?.[selectedSheet] || previewAOA || [];
       setFullBySheet((prev) => ({ ...prev, [selectedSheet]: fallback }));
       setPreviewAOA(fallback);
-      setEditorOpen(true);
+      setIsEditorOpen(true);
     }
   };
 
   const handleCloseEditor = () => {
+    console.log('closeEditor');
     if (selectedSheet) {
       setFullBySheet((prev) => ({ ...prev, [selectedSheet]: previewAOA }));
     }
-    setEditorOpen(false);
+    setIsEditorOpen(false);
   };
 
   const onInputChange = (e) => {
+    console.log('onInputChange', e);
     handlePickFile(e.target.files?.[0]);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
+
   const onDrop = async (e) => {
-    e.preventDefault(); e.stopPropagation(); setDragOver(false);
+    console.log('drop', e);
+    e.preventDefault(); e.stopPropagation(); setdragOver(false);
     const f = e.dataTransfer?.files?.[0];
     if (f) {
       const success = await handlePickFile(f);
       if (!success && fileInputRef.current) fileInputRef.current.value = "";
     }
   };
-  const onDragOver = (e) => { e.preventDefault(); setDragOver(true); };
-  const onDragLeave = () => setDragOver(false);
+
+  const onDragOver = (e) => { console.log('dragOver', e);
+    e.preventDefault(); setdragOver(true); };
+  const onDragLeave = () => setdragOver(false);
 
   const handleUpload = () => {
-    uploadEdited(previewAOA, selectedSheet, form?.code, testCaseId, setEditorOpen);
+    console.log('handleUpload');
+    uploadEdited(previewAOA, selectedSheet, form?.code, testCaseId, setIsEditorOpen);
   };
 
   return (
@@ -139,12 +146,14 @@ export default function TestCaseExcelTab({ form, testCaseId, excelFileName, read
 
           <div className="flex items-center gap-2">
             <button
+              type = "button"
               onClick={loadServerExcel}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 hover:text-blue-600 transition shadow-sm"
             >
               <RefreshIcon className="w-3.5 h-3.5" /> 불러오기
             </button>
             <button
+              type = "button"
               onClick={() => downloadServerExcel(excelFileName || `${form?.code || testCaseId}.xlsx`)}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 hover:text-blue-600 transition shadow-sm"
             >
@@ -152,6 +161,7 @@ export default function TestCaseExcelTab({ form, testCaseId, excelFileName, read
             </button>
             {!isRO && meta && (
               <button
+                type = "button"
                 onClick={() => resetPicker(fileInputRef)}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-rose-600 bg-white border border-rose-200 rounded-lg hover:bg-rose-50 transition shadow-sm ml-2"
               >
@@ -183,7 +193,7 @@ export default function TestCaseExcelTab({ form, testCaseId, excelFileName, read
           <StartChooser
             disabled={isDropDisabled}
             onPickUpload={() => fileInputRef.current?.click()}
-            onPickEmpty={() => startFromTemplate(() => setEditorOpen(true))}
+            onPickEmpty={() => startFromTemplate(() => setIsEditorOpen(true))}
           />
         </div>
       )}
@@ -219,6 +229,7 @@ export default function TestCaseExcelTab({ form, testCaseId, excelFileName, read
           <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2">
             {visibleSheets.length > 0 ? visibleSheets.map((name) => (
               <button
+                type = "button"
                 key={name}
                 onClick={() => setSelectedSheet(name)}
                 disabled={blocked}
@@ -256,7 +267,7 @@ export default function TestCaseExcelTab({ form, testCaseId, excelFileName, read
                   {Math.min(dataRows.length, PREVIEW_ROW_LIMIT)} / {dataRows.length} 행
                 </span>
               )}
-              {!isRO && dataRows?.length > 0 && (
+              {dataRows?.length > 0 && (
                 <button
                   type="button"
                   onClick={openEditor}
@@ -310,6 +321,7 @@ export default function TestCaseExcelTab({ form, testCaseId, excelFileName, read
                         </span>
                       {!isRO && (
                         <button
+                          type = "button"
                           onClick={openEditor}
                           className="px-4 py-2 rounded-full bg-white border border-slate-200 text-xs font-semibold text-blue-600 shadow-sm hover:shadow hover:border-blue-200 transition-all"
                         >
@@ -327,9 +339,9 @@ export default function TestCaseExcelTab({ form, testCaseId, excelFileName, read
       )}
 
       {/* Editor Modal */}
-      {editorOpen && (
+      {isEditorOpen && (
         <ExcelPreviewEditor
-          open={editorOpen}
+          open={isEditorOpen}
           onClose={handleCloseEditor}
           meta={meta}
           selectedSheet={selectedSheet}
@@ -341,6 +353,7 @@ export default function TestCaseExcelTab({ form, testCaseId, excelFileName, read
           onUpload={handleUpload}
           uploading={uploading}
           readOnly={isRO || blocked}
+          teatcaseName={form.name ?? "테스트 케이스"}
         />
       )}
     </div>

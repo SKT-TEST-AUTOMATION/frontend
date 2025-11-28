@@ -1,5 +1,6 @@
+// src/features/device-farm/hooks/useDeviceFarm.js
 import { useCallback, useEffect, useRef } from "react";
-import { useSetRecoilState } from "recoil";
+import { useSetRecoilState, useRecoilValue } from "recoil";
 import { deviceFarmState } from "../state/deviceFarmState";
 
 /**
@@ -84,24 +85,17 @@ function mapDfDevice(
 }
 
 /**
- * useDeviceFarmPolling
- *
- * @param {Object} options
- * @param {"local"|"remote"} options.mode  - "local"이면 127.0.0.1:4723 기준 고정
- * @param {string} [options.url]           - mode === "remote" 일 때 DF 조회 URL
- * @param {number} [options.intervalMs]
- * @param {string} [options.appiumHost]    - mode === "remote" 에서 사용
- * @param {number} [options.appiumPort]    - mode === "remote" 에서 사용
- * @param {string} [options.basePath]
+ * 내부 폴링 훅 (Recoil state만 갱신)
+ * - 기존 useDeviceFarmPolling 역할
  */
-export function useDeviceFarmPolling({
-  mode = "local", // ★ 기본은 로컬 모드
-  url,
-  intervalMs = 4000,
-  appiumHost,
-  appiumPort,
-  basePath = "/wd/hub",
-} = {}) {
+function useDeviceFarmPolling({
+                                mode = "local", // ★ 기본은 로컬 모드
+                                url,
+                                intervalMs = 4000,
+                                appiumHost,
+                                appiumPort,
+                                basePath = "/wd/hub",
+                              } = {}) {
   const set = useSetRecoilState(deviceFarmState);
   const timerRef = useRef(null);
 
@@ -127,10 +121,10 @@ export function useDeviceFarmPolling({
         const arr = Array.isArray(data)
           ? data
           : Array.isArray(data.devices)
-          ? data.devices
-          : Array.isArray(data.items)
-          ? data.items
-          : [];
+            ? data.devices
+            : Array.isArray(data.items)
+              ? data.items
+              : [];
 
         const mapped = arr.map((d) =>
           mapDfDevice(d, {
@@ -148,6 +142,7 @@ export function useDeviceFarmPolling({
           error: null,
           lastUpdatedAt: Date.now(),
           items: mapped,
+          appiumHost: effectiveHost,
         });
       } catch (e) {
         console.log(e);
@@ -195,3 +190,21 @@ export function useDeviceFarmPolling({
 
   return { refresh, stop, start };
 }
+
+/**
+ * 외부에서 사용하는 훅
+ * - Recoil state + 폴링 제어 함수를 한 번에 반환
+ * - DeviceFarmPage.jsx 에서 사용
+ */
+export function useDeviceFarm(options = {}) {
+  const polling = useDeviceFarmPolling(options);     // refresh, start, stop
+  const state = useRecoilValue(deviceFarmState);     // items, loading, error, lastUpdatedAt
+
+  return {
+    ...state,
+    ...polling,
+  };
+}
+
+// 기존 코드와의 호환을 위해 필요하면 이것도 export
+export { useDeviceFarmPolling };

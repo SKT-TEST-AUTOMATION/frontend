@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useToast } from "../../../shared/hooks/useToast";
-import { readExcelFile, buildXlsxFromAOA, buildInitialSheetAOA } from "../../../shared/utils/excelUtils";
+import { readExcelFile, buildXlsxFromAOA, buildInitialSheetAOA, buildXlsxFromSheets } from "../../../shared/utils/excelUtils";
 import { downloadFile } from "../../../shared/utils/fileUtils";
 import { REQUEST_CANCELED_CODE } from "../../../constants/errors";
 import { toErrorMessage } from "../../../services/axios";
@@ -13,6 +13,7 @@ const DEFAULT_CONFIG_HEADERS = [
   "no", "name", "mandatory", "skip_on_error", "sleep", "action", "input_text", "by", "value", "memo"
 ];
 
+// 시트 이름 검증
 function sanitizeSheetName(raw) {
   const name = String(raw ?? "").trim();
   const invalid = /[\\/*?:\[\]]/g;
@@ -20,6 +21,7 @@ function sanitizeSheetName(raw) {
   return cleaned || "Sheet1";
 }
 
+// template으로 시작할 경우 meta 파일 생성
 function makeTemplateMeta(sheetName = "custom_sheet", formName) {
   const header = DEFAULT_CONFIG_HEADERS.slice();
   const name = sanitizeSheetName(formName || sheetName);
@@ -38,57 +40,81 @@ function makeTemplateMeta(sheetName = "custom_sheet", formName) {
 export function useExcelTabState({ form, testCaseId, excelFileName, readOnly = false, navigate }) {
   const { showToast } = useToast();
 
+  // 현재 선택되어 불러온 excel 파일
   const [file, setFile] = useState(null);
+  // excel 파일을 read해서 정제한 결과
   const [meta, setMeta] = useState(null); // { sheets, previewBySheet, headerBySheet, sourceFile }
-  const [fullBySheet, setFullBySheet] = useState({}); // 전체 시트 캐시 (편집기에서 사용)
+  // 전체 시트 캐시
+  const [fullBySheet, setFullBySheet] = useState({});
+  // 현재 선택한 시트 이름
   const [selectedSheet, setSelectedSheet] = useState("");
-  const [previewAOA, setPreviewAOA] = useState([]); // 현재 선택 시트의 미리보기 AOA
+  // 현재 선택한 시트의 미리보기용 AOA
+  const [previewAOA, setPreviewAOA] = useState([]);
+  // uploading 여부 확인
   const [uploading, setUploading] = useState(false);
+  // 초기 1번 업로드 되었는지 확인 용
   const [autoLoaded, setAutoLoaded] = useState(false);
 
+  // readOnly 상태인가?
   const isRO = !!readOnly;
+  // 수정 가능한 상태인가?
   const canEdit = !!testCaseId && !isRO;
   const blocked = !testCaseId || readOnly;
 
   // 실제 데이터가 있는 시트 중에서 최초 선택 시트를 고르는 헬퍼
-  const pickInitialSheet = useCallback((m) => {
-    if (!m) return "";
-    const sheets = m.sheets || [];
-    const preview = m.previewBySheet || {};
+  const pickInitialSheet = useCallback((meta) => {
+    console.log(pickInitialSheet);
+    if (!meta) return "";
+    const sheets = meta.sheets || [];
+    const preview = meta.previewBySheet || {};
 
     const hasPreview = (name) =>
       !!name && Array.isArray(preview[name]) && preview[name].length > 0;
 
-    let preferred = sheets.includes("Config") ? "Config" : sheets[0] || "";
+    let firstSheet = sheets[0] || "";
 
-    if (!hasPreview(preferred)) {
+    if (!hasPreview(firstSheet)) {
       const found = sheets.find(hasPreview);
-      preferred = found || "";
+      firstSheet = found || "";
     }
-    return preferred;
+    return firstSheet;
   }, []);
 
   // 서버 저장본 불러오기
-  const loadServerExcel = useCallback(async () => {
+  const loadServerExcel = async () => {
     if (!testCaseId) return;
     try {
       const res = await fetch(`/api/v1/testcases/${encodeURIComponent(testCaseId)}/excel`, { method: "GET" });
       if (!res.ok) throw new Error((await res.text().catch(() => "")) || `HTTP ${res.status}`);
+
       const blob = await res.blob();
       const name = excelFileName || `${form?.code || testCaseId}.xlsx`;
       const fileObj = new File([blob], name, { type: blob.type || "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       setFile(fileObj);
-      const m = await readExcelFile(fileObj);
-      setMeta(m);
-      const preferred = pickInitialSheet(m);
+      setFullBySheet({});
+      const metaData = await readExcelFile(fileObj);
+      setMeta(metaData);
+      const preferred = pickInitialSheet(metaData);
       setSelectedSheet(preferred);
-      setPreviewAOA((m.previewBySheet || {})[preferred] || []);
+      setPreviewAOA((metaData.previewBySheet || {})[preferred] || []);
       showToast("success", "불러오기 완료");
     } catch (err) {
       if (err?.code === REQUEST_CANCELED_CODE) return;
       showToast("error", toErrorMessage(err));
     }
-  }, [testCaseId, excelFileName, form?.code, pickInitialSheet, showToast]);
+  };
+
+  // 서버 저장본 직접 다운로드
+  const downloadServerExcel = async () => {
+    console.log('downloadServerExcel');
+    if (!testCaseId) return;
+    try {
+      const name = (excelFileName && String(excelFileName).trim()) || `${form?.code || testCaseId}.xlsx`;
+      await downloadFile(`/api/v1/testcases/${encodeURIComponent(testCaseId)}/excel`, name);
+    } catch (err) {
+      showToast({type: "error", message: "다운로드 실패", detailMessage: err});
+    }
+  };
 
   // 파일 업로드 핸들러
   const handlePickFile = useCallback(async (f) => {
@@ -108,6 +134,7 @@ export function useExcelTabState({ form, testCaseId, excelFileName, readOnly = f
     }
     try {
       setFile(f);
+      setFullBySheet({});
       const m = await readExcelFile(f);
       setMeta(m);
       const preferred = pickInitialSheet(m);
@@ -118,10 +145,11 @@ export function useExcelTabState({ form, testCaseId, excelFileName, readOnly = f
       showToast("error", "엑셀 파싱에 실패했습니다.");
       return false;
     }
-  }, [pickInitialSheet, showToast]);
+  }, [pickInitialSheet]);
 
   // 템플릿 시작
   const startFromTemplate = useCallback((openEditor) => {
+    console.log(startFromTemplate);
     const initialName = sanitizeSheetName(form?.name || "custom_sheet");
     const m = makeTemplateMeta(initialName, form?.name);
     setFile(null);
@@ -133,8 +161,50 @@ export function useExcelTabState({ form, testCaseId, excelFileName, readOnly = f
     showToast("info", "기본 템플릿으로 새 시트를 시작합니다.");
   }, [form?.name, showToast]);
 
+  // 업로드(전체 시트)
+  const uploadSheets = useCallback(
+    async (sheets, formCode, testCaseId) => {
+      console.log("uploadEdited(workbook)", sheets);
+
+      // 기본 가드
+      if (blocked || uploading) return;
+      if (!sheets || Object.keys(sheets).length === 0) return;
+
+      setUploading(true);
+      try {
+        // 필요하다면 내부 상태(fullBySheet 등)에 반영
+        // (지금은 UI에서 바로 ExcelEditor를 보여주고 있어서
+        //  꼭 필요 없다면 생략 가능)
+        // setFullBySheet(sheets);
+
+        // 여러 시트를 포함한 워크북 Blob 생성
+        const blob = buildXlsxFromSheets(sheets);
+
+        const filename = `${formCode || testCaseId}.xlsx`;
+
+        await uploadTestcaseExcel(testCaseId, {
+          file: blob,
+          filename,
+          edited: true,
+          // sheetName은 이제 단일 시트 업로드가 아니면 굳이 필요 X
+        });
+
+        showToast("success", "수정된 엑셀 파일을 업로드했습니다.");
+        navigate(`/testcases/${testCaseId}/detail`, { replace: true });
+      } catch (err) {
+        if (err?.code !== REQUEST_CANCELED_CODE) {
+          showToast("error", toErrorMessage(err));
+        }
+      } finally {
+        setUploading(false);
+      }
+    },
+    [blocked, uploading, navigate]
+  );
+
   // 업로드(선택 시트만)
   const uploadEdited = useCallback(async (previewAOA, selectedSheet, formCode, testCaseId, setEditorOpen) => {
+    console.log(uploadEdited);
     if (blocked || uploading || !selectedSheet || previewAOA.length === 0) return;
 
     setUploading(true);
@@ -147,7 +217,7 @@ export function useExcelTabState({ form, testCaseId, excelFileName, readOnly = f
       }));
 
       // AOA를 Blob으로 변환
-      const blob = buildXlsxFromAOA({ [selectedSheet]: aoaToSave });
+      const blob = buildXlsxFromAOA(selectedSheet, aoaToSave);
       const filename = `${formCode || testCaseId}-${selectedSheet}.xlsx`;
 
       await uploadTestcaseExcel(
@@ -163,35 +233,35 @@ export function useExcelTabState({ form, testCaseId, excelFileName, readOnly = f
     } finally {
       setUploading(false);
     }
-  }, [blocked, uploading, navigate, showToast]);
+  }, []);
 
 
   // AOA 업데이트 유틸
-  const updateCell = useCallback((ri, ci, val) => {
+  const updateCell = useCallback((rowIdx, colIdx, value) => {
     setPreviewAOA((prev) => {
-      if (!Array.isArray(prev) || !prev[ri]) return prev;
-      const nextRow = prev[ri].map((cell, index) => (index === ci ? val : cell));
-      const next = prev.map((row, index) => (index === ri ? nextRow : row));
+      if (!Array.isArray(prev) || !prev[rowIdx]) return prev;
+      const nextRow = prev[rowIdx].map((cell, index) => (index === colIdx ? value : cell));
+      const next = prev.map((row, index) => (index === rowIdx ? nextRow : row));
       return next;
     });
   }, []);
 
-  const insertRowBelow = useCallback((ri) => {
+  const insertRowBelow = useCallback((rowIdx) => {
     setPreviewAOA((prev) => {
       if (!Array.isArray(prev)) return prev;
-      const colCount = Math.max((prev[ri]?.length || 0), (prev[0]?.length || 0));
+      const colCount = Math.max((prev[rowIdx]?.length || 0), (prev[0]?.length || 0));
       const empty = Array.from({ length: colCount }, () => "");
       const next = prev.slice();
-      next.splice(ri + 1, 0, empty);
+      next.splice(rowIdx + 1, 0, empty);
       return next;
     });
   }, []);
 
-  const deleteRowAt = useCallback((ri) => {
+  const deleteRowAt = useCallback((rowIdx) => {
     setPreviewAOA((prev) => {
       if (!Array.isArray(prev) || prev.length <= 1) return prev;
       const next = prev.slice();
-      next.splice(ri, 1);
+      next.splice(rowIdx, 1);
       return next;
     });
   }, []);
@@ -199,20 +269,23 @@ export function useExcelTabState({ form, testCaseId, excelFileName, readOnly = f
   // Effects
   // 1. 최초 서버 파일 자동 로드
   useEffect(() => {
+    console.log('// 1. 최초 서버 파일 자동 로드');
     if (!autoLoaded && excelFileName && testCaseId) {
       setAutoLoaded(true);
       loadServerExcel();
     }
-  }, [autoLoaded, excelFileName, testCaseId, loadServerExcel]);
+  }, [testCaseId]);
 
   // 2. 시트 변경 시 미리보기 갱신
   useEffect(() => {
+    console.log('// 2. 시트 변경 시 미리보기 갱신');
     if (!meta || !selectedSheet) return;
     setPreviewAOA(meta.previewBySheet?.[selectedSheet] || []);
   }, [meta, selectedSheet]);
 
   // 3. 템플릿 모드에서 시트명 자동 동기화
   useEffect(() => {
+    console.log('// 3. 템플릿 모드에서 시트명 자동 동기화')
     if (!meta || file) return;
     if (!selectedSheet) return;
     const desired = sanitizeSheetName(form?.name || selectedSheet);
@@ -274,8 +347,8 @@ export function useExcelTabState({ form, testCaseId, excelFileName, readOnly = f
     // 세터
     setFile, setMeta, setFullBySheet, setSelectedSheet, setPreviewAOA, setUploading,
     // 액션
-    loadServerExcel, downloadServerExcel: (name) => downloadFile(`/api/v1/testcases/${encodeURIComponent(testCaseId)}/excel`, name),
-    handlePickFile, startFromTemplate, uploadEdited,
+    loadServerExcel, downloadServerExcel,
+    handlePickFile, startFromTemplate, uploadEdited, uploadSheets,
     updateCell, insertRowBelow, deleteRowAt, resetPicker,
     pickInitialSheet,
   };

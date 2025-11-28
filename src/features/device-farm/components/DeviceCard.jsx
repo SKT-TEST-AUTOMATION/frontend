@@ -1,44 +1,97 @@
+import React from "react";
+import { IconAndroid, IconApple, IconMobile } from "./DeviceFarmIcons.jsx";
 
+const StatusBadge = ({ available, offline, busy }) => {
+  if (offline) {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 ring-1 ring-inset ring-slate-500/10">
+        <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+        Offline
+      </span>
+    );
+  }
+  if (busy) {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20">
+        <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+        Busy
+      </span>
+    );
+  }
+  if (available) {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
+        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+        Available
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+      Unknown
+    </span>
+  );
+};
 
-export default function DeviceCard({ d, onDetail, onSave }) {
-  const dotClass = d.available ? "bg-green-500" : d.busy ? "bg-gray-400" : "bg-gray-300";
-  const statusText = d.available ? "available" : d.busy ? "in use" : "offline";
-
-  const shortUdid = d.udid.length > 10 ? d.udid.slice(0, 8) + "..." : d.udid;
+export default function DeviceCard({ device, actionButton, onClick }) {
+  const isIOS = device.platform === "IOS"
 
   return (
-    <div className="rounded-xl border border-gray-200 shadow-sm p-4 w-72">
+    <div onClick={onClick} className="group relative flex flex-col justify-between overflow-hidden rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:shadow-md hover:border-slate-300 cursor-pointer">
       <div className="flex items-start justify-between">
-        <h3 className="text-lg font-semibold leading-tight">{d.name}</h3>
-        <div className="flex items-center gap-2 text-sm text-gray-500">
-          <span className={`inline-block w-2.5 h-2.5 rounded-full ${dotClass}`} />
-          <span>{statusText}</span>
+        <div className="flex items-center gap-3">
+          <div
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
+              isIOS ? "bg-slate-900 text-white" : "bg-green-600 text-white"
+            }`}
+          >
+            {isIOS ? (
+              <IconApple className="h-6 w-6" />
+            ) : (
+              <IconAndroid className="h-6 w-6" />
+            )}
+          </div>
+          <div>
+            <h4
+              className="text-sm font-semibold text-slate-900 line-clamp-1"
+              title={device.name}
+            >
+              {device.name}
+            </h4>
+            <div className="mt-0.5 text-xs text-slate-500 font-mono">
+              {device.udid.slice(0, 16)}
+              {device.udid.length > 16 && "..."}
+            </div>
+          </div>
         </div>
+        <StatusBadge
+          available={device.available}
+          offline={device.offline}
+          busy={device.busy}
+        />
       </div>
 
-      <dl className="mt-3 text-sm text-gray-700 space-y-1">
-        <div className="flex justify-between"><dt className="text-gray-500">UDID</dt><dd className="font-medium">{shortUdid}</dd></div>
-        <div className="flex justify-between"><dt className="text-gray-500">Platform</dt><dd className="font-medium">{d.platform}</dd></div>
-        <div className="flex justify-between"><dt className="text-gray-500">Appium Port</dt><dd className="font-medium">{d.appiumPort}</dd></div>
-        <div className="flex justify-between"><dt className="text-gray-500">System Port</dt><dd className="font-medium">{d.systemPort ?? "-"}</dd></div>
-      </dl>
+      <div className="mt-5 space-y-2 border-t border-slate-100 pt-3">
+        {(device.connectedIp || device.appiumHost) && (
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-slate-500">Host</span>
+            <span className="font-mono text-slate-700 bg-slate-50 px-1.5 py-0.5 rounded">
+              {device.connectedIp || `device.appiumHost:${device.appiumPort}`}
+            </span>
+          </div>
+        )}
 
-      <div className="mt-4 flex gap-2">
-        <button
-          onClick={() => onDetail?.(d)}
-          className="flex-1 rounded-lg bg-blue-600 text-white py-2 hover:bg-blue-700"
-        >
-          상세 보기
-        </button>
-        <button
-          disabled={!d.available}
-          onClick={() => onSave?.(d)}
-          className={`rounded-lg px-3 py-2 border ${d.available ? "border-blue-600 text-blue-600 hover:bg-blue-50" : "border-gray-200 text-gray-400 cursor-not-allowed"}`}
-          title={d.available ? "이 단말 저장" : "사용 불가 상태"}
-        >
-          저장
-        </button>
+        {device.systemPort && (
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-slate-500">System Port</span>
+            <span className="font-mono text-slate-700 bg-slate-50 px-1.5 py-0.5 rounded">
+              {device.systemPort}
+            </span>
+          </div>
+        )}
       </div>
+
+      {actionButton && <div className="mt-4 pt-2">{actionButton}</div>}
     </div>
   );
 }

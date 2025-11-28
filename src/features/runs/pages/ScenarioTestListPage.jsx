@@ -18,26 +18,6 @@ const DAY_OF_WEEK_ENUMS = [
   "MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY","SATURDAY","SUNDAY"
 ];
 
-function maskToDayOfWeekList(mask) {
-  const out = [];
-  for (let i = 0; i < 7; i++) {
-    if ((mask & (1 << i)) !== 0) out.push(DAY_OF_WEEK_ENUMS[i]);
-  }
-  return out;
-}
-
-// 로그인 사용자 id 확보 (원하시는 방식으로 교체하세요)
-function getCurrentUserIdOrNull() {
-  // 1) 로컬스토리지 사용 예시
-  const s1 = window.localStorage?.getItem?.("userId");
-  if (s1) return Number(s1);
-  // 2) 전역 주입(있다면)
-  if (typeof window !== "undefined" && window.__CURRENT_USER_ID__) {
-    return Number(window.__CURRENT_USER_ID__);
-  }
-  return null; // 없으면 null
-}
-
 // ---- shared helpers (componentized) ----
 const WEEKDAYS = [
   { label: "월", bit: 0 },
@@ -225,6 +205,7 @@ const ScenarioTestRow = React.memo(function ScenarioTestRow({
           <div className="mt-3">
             {logViewMode === "report" ? (
               <RunReportPanel
+                testName={testName}
                 runId={expandedRunId}
                 onClose={() => onToggleLogs(id, null)} // closes
               />

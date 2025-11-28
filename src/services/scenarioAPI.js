@@ -64,3 +64,20 @@ export async function deleteScenarioTest(id) {
   const res = await api.delete(`scenarios/tests/${id}?userId=1`);
   return res?.data?.data ?? res?.data;
 }
+
+// 시나리오 엑셀 업로드
+export async function uploadScenarioExcel(id, { file, sheetName, filename, edited = false } = {}, signal) {
+  const fd = new FormData();
+  // 파일명 결정: 명시적 filename > 시트명.xlsx > edited.xlsx
+  const safeName = filename || (sheetName ? `${sheetName}.xlsx` : `edited.xlsx`);
+  fd.append("file", file, safeName);
+  if (sheetName) fd.append("sheetName", sheetName);
+  fd.append("edited", String(!!edited));
+
+  const res = await api.post(`scenarios/${id}/excel?userId=1`, fd, {
+    signal,
+    // axios가 boundary를 자동으로 설정하므로 명시 지정 불필요하지만, 명시해도 무방
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return res?.data?.data ?? res?.data;
+}

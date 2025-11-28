@@ -1,4 +1,3 @@
-// src/features/scenario/pages/ScenarioCreatePage.jsx
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useParams } from "react-router-dom";
@@ -11,6 +10,7 @@ import { createScenario, getScenario, updateScenario } from "../../../services/s
 import { getTestcases } from "../../../services/testcaseAPI";
 import { REQUEST_CANCELED_CODE } from "../../../constants/errors";
 import { toErrorMessage } from "../../../services/axios";
+import ScenarioExcelUploadPanel from '../components/ScenarioExcelUploadPanel.jsx';
 
 const DRAFT_KEY = "scenario:new:draft";
 
@@ -35,6 +35,8 @@ export default function ScenarioCreatePage() {
   const [tcLoading, setTcLoading] = useState(true);
   const [tcError, setTcError] = useState(null);
   const [candidates, setCandidates] = useState([]); // [{id, label, raw}]
+
+  const [scenarioExcelFileName, setScenarioExcelFileName] = useState(null);
 
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
 
@@ -230,7 +232,16 @@ export default function ScenarioCreatePage() {
         selected={selected}
         setSelected={setSelected}
         footerActions={footerActions}
+        isEdit={isEdit}
       />
+
+      {isEdit && (
+        <ScenarioExcelUploadPanel
+          scenarioId={Number(routeScenarioId)}
+          excelFileName={scenarioExcelFileName}
+          onChange={setScenarioExcelFileName}
+        />
+      )}
     </form>
   );
 }

@@ -1,319 +1,401 @@
 // src/features/devices/pages/DeviceFarmPage.jsx
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRecoilValue } from "recoil";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { getDevices } from "../../services/deviceAPI.js";
+import { useDeviceFarm } from "./hooks/useDeviceFarm.js";
+import DeviceCard from "./components/DeviceCard";
+import RegisterModal from "./components/RegisterModal";
+import { IconRefresh, IconSearch, IconPlus, IconMobile } from "./components/DeviceFarmIcons";
+import DeviceStatusChart from "./components/DeviceStatusChart.jsx";
+import DeviceDetailModal from "./components/DeviceDetailModal.jsx";
+import PageHeader from "../../shared/components/PageHeader.jsx";
 
-import PageHeader from "../../shared/components/PageHeader";
-import { deviceFarmState } from "./state/deviceFarmState";
-import { useDeviceFarmPolling } from "./hooks/useDeviceFarm";
-import { api, normalizePage, toErrorMessage } from "../../services/axios";
-import { createDevice, getDevices } from "../../services/deviceAPI";
-import { REQUEST_CANCELED_CODE } from "../../constants/errors";
-
-// ──────────────────────────────────────────────────────────
-// 간단한 상태/뱃지
-// ──────────────────────────────────────────────────────────
-function AvailabilityBadge({ available, offline, busy }) {
-  let text = "UNAVAILABLE";
-  let klass = "bg-gray-100 text-gray-700 dark:bg-gray-700/40 dark:text-gray-200";
-  if (available) {
-    text = "AVAILABLE";
-    klass = "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200";
-  } else if (offline) {
-    text = "OFFLINE";
-    klass = "bg-gray-200 text-gray-600 dark:bg-gray-700/60 dark:text-gray-300";
-  } else if (busy) {
-    text = "BUSY";
-    klass = "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200";
-  }
-  return <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${klass}`}>{text}</span>;
-}
-
-// ──────────────────────────────────────────────────────────
-function DeviceCard({ d, right }) {
-  // d: {udid, name, platform, available, offline, busy, appiumHost...}
-  return (
-    <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 flex items-start justify-between">
-      <div className="min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="material-symbols-outlined text-gray-400">smartphone</span>
-          <span className="font-medium text-gray-900 dark:text-gray-100 truncate">{d.name || d.udid}</span>
-        </div>
-        {(d.connectedIp || d.appiumHost) && (
-          <div className="mt-1 text-[11px] text-gray-500 dark:text-gray-400 truncate">
-            {d.connectedIp || d.appiumHost}:{d.appiumPort}{d.basePath || ""}
-          </div>
-        )}
-        {d.systemPort && (
-          <div className ="mt-1 text-[11px] text-gray-500 dark:text-gray-400 truncate">
-            system port: {d.systemPort}
-          </div>
-        )}
-        <div className="mt-2">
-          {"available" in d && <AvailabilityBadge available={d.available} offline={d.offline} busy={d.busy} />}
-        </div>
-      </div>
-      <div className="shrink-0">{right}</div>
-    </div>
-  );
-}
-
-// ──────────────────────────────────────────────────────────
-// 등록 모달: 이름 입력 → POST /api/v1/devices
-// ──────────────────────────────────────────────────────────
-function RegisterModal({ open, onClose, initial, onSaved }) {
-  const [name, setName] = useState(initial?.name || "");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    if (open) {
-      setName(initial?.name || "");
-      setError(null);
-    }
-  }, [open, initial]);
-
-  if (!open) return null;
-
-  const displayAppiumPort = initial?.appiumPort ?? 4723; // UI 표시용 (저장 기본값과 동일)
-  const displaySystemPort = initial?.systemPort ?? null; // null이면 미지정
-
-  const submit = async () => {
-    setSaving(true);
-    setError(null);
-    try {
-      await createDevice({
-        udid: initial.udid,
-        name: name?.trim() || initial.udid,
-        deviceOsType: (initial.platform || "").toUpperCase() === "IOS" ? "IOS" : "ANDROID",
-        systemPort: initial.systemPort ?? null,
-        appiumPort: initial.appiumPort ?? 4723,
-        connectedIp: initial.connectedIp ?? initial.connectedUrl ?? initial.appiumHost ?? "127.0.0.1",
-      });
-      onSaved?.();
-      onClose?.();
-    } catch (e) {
-      setError(e?.response?.data?.message || e?.message || "저장 실패");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-2xl">
-        <div className="flex items-start justify-between gap-2 border-b border-gray-200 dark:border-gray-700 px-5 py-4">
-          <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">디바이스 등록</h3>
-          <button onClick={onClose} className="p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition">
-            <span className="material-symbols-outlined">close</span>
-          </button>
-        </div>
-        <div className="px-5 py-4 space-y-3">
-          <div className="text-xs text-gray-500 dark:text-gray-400">* {initial?.platform} DEVICE </div>
-          <label className="block text-sm text-gray-700 dark:text-gray-200">UDID</label>
-            <input
-                value={initial?.udid}
-                readOnly
-                className="h-10 w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/40 px-3 text-sm text-gray-700 dark:text-gray-300 outline-none"
-            />
-          <label className="block text-sm text-gray-700 dark:text-gray-200">이름</label>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="h-11 w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-blue-500/50"
-            placeholder="예: Galaxy A12 #1"
-          />
-
-          {/* 연결 포트 표시 (읽기 전용) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-            <div>
-              <label className="block text-sm text-gray-700 dark:text-gray-200">Appium Port</label>
-              <input
-                value={String(displayAppiumPort)}
-                readOnly
-                className="h-10 w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/40 px-3 text-sm text-gray-700 dark:text-gray-300 outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-700 dark:text-gray-200">System Port</label>
-              <input
-                value={displaySystemPort != null ? String(displaySystemPort) : ""}
-                placeholder="미지정"
-                readOnly
-                className="h-10 w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/40 px-3 text-sm text-gray-700 dark:text-gray-300 outline-none"
-              />
-            </div>
-          </div>
-
-          {error && <div className="text-sm text-rose-600 dark:text-rose-300">{error}</div>}
-        </div>
-        <div className="flex items-center justify-end gap-2 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 px-5 py-3">
-          <button onClick={onClose} className="rounded-xl border border-gray-300 dark:border-gray-600 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700">
-            취소
-          </button>
-          <button
-            onClick={submit}
-            disabled={saving}
-            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-60"
-          >
-            {saving ? "저장 중…" : "저장"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ──────────────────────────────────────────────────────────
-// 페이지
-// ──────────────────────────────────────────────────────────
 export default function DeviceFarmPage() {
-  // Appium 폴링 (탭이 비활성화되면 자동 스킵됨)
-  const { refresh } = useDeviceFarmPolling({
-    url: "http://127.0.0.1:4723/device-farm/api/device",
-    intervalMs: 4000,
-    appiumHost: "127.0.0.1",
-    appiumPort: 4723,
-    basePath: "/",
-  });
-  const { loading: dfLoading, error: dfError, items: dfItems = [], lastUpdatedAt } = useRecoilValue(deviceFarmState);
+  // 1. Live Data (Appium Polling) - "The Truth of State"
+  const {
+    items: dfItems = [],
+    loading: dfLoading,
+    error: dfError,
+    lastUpdatedAt,
+    refresh,
+    appiumHost,
+  } = useDeviceFarm();
 
-  // 백엔드 등록 목록
+  // 2. Persistent Data (Backend API) - "The Truth of Inventory"
   const [beLoading, setBeLoading] = useState(true);
   const [beError, setBeError] = useState(null);
-  const [beItems, setBeItems] = useState([]); // [{udid, name, platform, ...}]
+  const [beItems, setBeItems] = useState([]);
+  const [searchTerm, setSearchTerm] = useState("");
 
-  const fetchBackend = useCallback(async (signal) => {
+  const fetchBackend = useCallback(async () => {
     setBeLoading(true);
     setBeError(null);
     try {
-      // 예: /api/v1/devices?size=1000
+      const controller = new AbortController();
       const res = await getDevices(
-        { page: 0, size: 100, sort:"udid,desc"},
-        signal
+        { page: 0, size: 100, sort: "udid,desc" },
+        controller.signal
       );
-      const data = normalizePage(res);
-      setBeItems(data.content);
+      console.log(res);
+      // getDevices 가 페이지 객체를 반환한다고 가정 (res.content)
+      setBeItems(res.content || []);
     } catch (err) {
-      if (err?.code === REQUEST_CANCELED_CODE) return;
-      setBeError(toErrorMessage(err));
+      setBeError(err?.message || "Failed to fetch registered devices");
     } finally {
       setBeLoading(false);
     }
   }, []);
 
-  useEffect(() => { 
-    const controller = new AbortController();
-    fetchBackend(controller.signal); 
+  useEffect(() => {
+    fetchBackend();
   }, [fetchBackend]);
 
-  // 매칭 맵 생성 (udid 기준)
+  // 3. Merging Logic
   const dfByUdid = useMemo(() => {
     const m = new Map();
-    for (const d of dfItems) m.set(d.udid, d);
+    for (const d of dfItems) {
+      if (d?.udid) m.set(d.udid, d);
+    }
     return m;
   }, [dfItems]);
 
-  // 등록된 기기(백엔드 기준) 배열: df 상태 덧씌움
-  const registered = useMemo(() => {
-    return beItems.map((b) => {
-      const live = dfByUdid.get(b.udid);
-      return {
-        udid: b.udid,
-        name: b.name || live?.name || b.udid,
-        platform: (b.platform || live?.platform || "").toUpperCase().includes("IOS") ? "IOS" : "ANDROID",
-        available: !!live?.available,
-        offline: !!live?.offline,
-        busy: !!live?.busy,
-        // 표시용
-        appiumHost: live?.appiumHost,
-        appiumPort: live?.appiumPort,
-        systemPort: live?.systemPort,
-        basePath: live?.basePath,
-      };
-    });
-  }, [beItems, dfByUdid]);
+  const registeredDevices = useMemo(() => {
+    const term = (searchTerm || "").toLowerCase();
 
-  // 미등록 기기(폴링엔 있지만 백엔드엔 없음)
-  const unregistered = useMemo(() => {
+    return beItems
+      .map((b) => {
+        const live = dfByUdid.get(b.udid);
+        const platformSource = b.deviceOsType || live?.platform || "";
+        const platform = platformSource.toUpperCase().includes("IOS")
+          ? "IOS"
+          : "ANDROID";
+
+        const name = b.name || live?.name || b.udid || "";
+
+        if (
+          term &&
+          !name.toLowerCase().includes(term) &&
+          !(b.udid || "").toLowerCase().includes(term)
+        ) {
+          return null;
+        }
+
+        return {
+          udid: b.udid,
+          name,
+          platform,
+          available: !!live?.available,
+          offline: !live || !!live?.offline, // live 정보 없으면 offline
+          busy: !!live?.busy,
+          appiumHost: live?.appiumHost,
+          appiumPort: live?.appiumPort || b.appiumPort,
+          systemPort:  b.systemPort || live?.systemPort,
+          basePath: live?.basePath,
+          connectedIp: live?.connectedIp || b.connectedIp,
+          isRegistered: true,
+        };
+      })
+      .filter(Boolean);
+  }, [beItems, dfByUdid, searchTerm]);
+
+  const unregisteredDevices = useMemo(() => {
     const setBE = new Set(beItems.map((b) => b.udid));
+    const term = (searchTerm || "").toLowerCase();
+
     return dfItems
       .filter((d) => !setBE.has(d.udid))
-      .map((d) => ({
-        ...d,
-        name: d.name || d.udid,
-        _unregistered: true,
-      }));
-  }, [beItems, dfItems]);
+      .map((d) => {
+        const platform = (d.platform || "").toUpperCase().includes("IOS")
+          ? "IOS"
+          : "ANDROID";
 
-  // 등록 모달
-  const [regOpen, setRegOpen] = useState(false);
-  const [regInitial, setRegInitial] = useState(null);
-  const openRegister = (d) => { setRegInitial(d); setRegOpen(true); };
-  const onSaved = async () => { await fetchBackend(); };
+        const name = d.name || d.udid || "";
+
+        if (
+          term &&
+          !name.toLowerCase().includes(term) &&
+          !(d.udid || "").toLowerCase().includes(term)
+        ) {
+          return null;
+        }
+
+        return {
+          udid: d.udid,
+          name,
+          platform,
+          available: d.available,
+          offline: d.offline,
+          busy: d.busy,
+          appiumHost: d.appiumHost,
+          appiumPort: d.appiumPort,
+          systemPort: d.systemPort,
+          basePath: d.basePath,
+          connectedIp: d.connectedIp,
+          isRegistered: false,
+        };
+      })
+      .filter(Boolean);
+  }, [beItems, dfItems, searchTerm]);
+
+  // ✅ 등록된 ANDROID / IOS 개수
+  const androidCount = useMemo(
+    () => registeredDevices.filter((d) => d.platform === "ANDROID").length,
+    [registeredDevices]
+  );
+  const iosCount = useMemo(
+    () => registeredDevices.filter((d) => d.platform === "IOS").length,
+    [registeredDevices]
+  );
+
+  // 4. Modal State
+  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedDevice, setSelectedDevice] = useState(null);
+
+  const handleOpenRegister = (device) => {
+    setSelectedDevice(device);
+    setModalOpen(true);
+  };
+
+  const handleRegisterSuccess = async () => {
+    await fetchBackend();
+    // Live 상태도 같이 새로 고침
+    refresh();
+  };
+
+  // 5. Detail Modal State
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [selectedRegisteredDevice, setSelectedRegisteredDevice] =
+    useState(null);
+
+  const handleOpenDetail = (d) => {
+    setSelectedRegisteredDevice(d);
+    setDetailModalOpen(true);
+  };
+
+  const handleSuccess = async () => {
+    await fetchBackend();
+    // Ideally we also force a live refresh, though fetchBackend is most critical here
+    await refresh();
+  };
 
   return (
     <>
       <div className="flex flex-col gap-6 p-6 bg-gray-50 dark:bg-gray-900 min-h-screen text-sm">
+        {/* Top Navigation / Header */}
         <PageHeader
           title="디바이스 관리"
-          subtitle={lastUpdatedAt ? `Appium 동기화: ${new Date(lastUpdatedAt).toLocaleTimeString()}` : "Appium 동기화 대기"}
+          subtitle="테스트에 사용하는 디바이스를 등록하고 관리합니다."
+          actions={
+                <div className="flex h-16 items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="hidden md:flex items-center gap-2 text-xs text-slate-500 bg-slate-100 rounded-full px-3 py-1">
+                      <span
+                        className={`h-2 w-2 rounded-full ${
+                          lastUpdatedAt ? "bg-emerald-500" : "bg-slate-400"
+                        }`}
+                      />
+                      {lastUpdatedAt
+                        ? `Synced ${new Date(
+                          lastUpdatedAt
+                        ).toLocaleTimeString()}`
+                        : "Connecting..."}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 ml-1 hidden md:flex">
+                    <button
+                      onClick={() => {
+                        refresh();
+                        fetchBackend();
+                      }}
+                      className="group relative rounded-lg p-2 text-slate-500 hover:bg-slate-100 transition-colors"
+                      title="Refresh Data"
+                    >
+                      <IconRefresh
+                        className={`h-3.5 w-3.5 ${
+                          dfLoading || beLoading ? "animate-spin" : ""
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+          }
         />
 
-        {/* 에러 알림 */}
-        {(dfError || beError) && (
-          <div className="mb-2 text-sm rounded-lg p-3 border"
-               style={{borderColor: 'rgb(254 202 202)', background: 'rgb(254 242 242)', color: 'rgb(185 28 28)'}}>
-            {dfError && <div>Appium 서버를 확인해주세요. </div>}
-            {beError && <div>등록 목록 불러오기 실패: {beError}</div>}
-          </div>
-        )}
-
-        {/* 등록된 기기 */}
-        <section className="space-y-3">
-          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-200">등록된 기기</h2>
-          {beLoading ? (
-            <div className="text-gray-500 dark:text-gray-400">불러오는 중…</div>
-          ) : registered.length === 0 ? (
-            <div className="text-gray-500 dark:text-gray-400">등록된 기기가 없습니다.</div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
-              {registered.map((d) => (
-                <DeviceCard key={d.udid} d={d} />
-              ))}
+        <main className="space-y-8">
+          {/* Errors */}
+          {(dfError || beError) && (
+            <div className="rounded-xl border border-red-100 bg-red-50 p-4">
+              <div className="flex gap-3">
+                <div className="shrink-0">
+                  <svg
+                    className="h-5 w-5 text-red-400"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </div>
+                <div className="text-sm text-red-700">
+                  <p className="font-medium">System Alert</p>
+                  {dfError && <p>Appium 서버를 확인해주세요.</p>}
+                  {beError && <p>Registry API: {beError}</p>}
+                </div>
+              </div>
             </div>
           )}
-        </section>
 
-        {/* 미등록 기기 */}
-        <section className="space-y-3">
-          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-200">미등록 기기</h2>
-          {dfLoading ? (
-            <div className="text-gray-500 dark:text-gray-400">Appium에서 불러오는 중…</div>
-          ) : unregistered.length === 0 ? (
-            <div className="text-gray-500 dark:text-gray-400">미등록 상태의 연결 기기가 없습니다.</div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
-              {unregistered.map((d) => (
-                <DeviceCard
-                  key={d.udid}
-                  d={d}
-                  right={
-                    <button
-                      onClick={() => openRegister(d)}
-                      className="inline-flex items-center gap-1 rounded-lg border border-gray-300 dark:border-gray-600 px-2.5 py-1.5 text-xs text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
-                    >
-                      <span className="material-symbols-outlined text-sm">add</span> 등록
-                    </button>
-                  }
-                />
-              ))}
+          {/* Stats & Mini Dashboard */}
+          <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* 1. 기존 Mini Dashboard 카드 (그대로 유지) */}
+            <div className="flex items-center justify-between bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+              <div className="text-left">
+                <div className="text-sm text-slate-500 font-medium">
+                  Total Registered
+                </div>
+                <div className="mt-1 text-2xl font-bold text-slate-900">
+                  {registeredDevices.length}
+                </div>
+              </div>
+              <div className="h-10 w-px bg-slate-100" />
+              <div className="flex items-center gap-2">
+                <DeviceStatusChart devices={registeredDevices} />
+              </div>
             </div>
-          )}
-        </section>
+
+            {/* 2. Android 카드 */}
+            <div className="flex items-center justify-between bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+              <div className="text-left">
+                <div className="text-sm text-slate-500 font-medium">
+                  Android
+                </div>
+                <div className="mt-1 text-2xl font-bold text-slate-900">
+                  {androidCount}
+                </div>
+                <div className="mt-1 text-xs text-slate-400">
+                  등록된 Android 디바이스
+                </div>
+              </div>
+            </div>
+
+            {/* 3. iOS 카드 */}
+            <div className="flex items-center justify-between bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+              <div className="text-left">
+                <div className="text-sm text-slate-500 font-medium">
+                  iOS
+                </div>
+                <div className="mt-1 text-2xl font-bold text-slate-900">
+                  {iosCount}
+                </div>
+                <div className="mt-1 text-xs text-slate-400">
+                  등록된 iOS 디바이스
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Registered Devices Grid */}
+          <section>
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+                등록된 기기
+                <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
+                  {registeredDevices.length}
+                </span>
+              </h2>
+            </div>
+
+            {beLoading && registeredDevices.length === 0 ? (
+              <div className="h-64 rounded-xl border border-dashed border-slate-300 bg-slate-50 flex items-center justify-center text-slate-400">
+                Loading registry...
+              </div>
+            ) : registeredDevices.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-12 text-center">
+                <IconMobile className="mx-auto h-10 w-10 text-slate-300 mb-3" />
+                <h3 className="mt-2 text-sm font-semibold text-slate-900">
+                  No registered devices
+                </h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  New devices detected by Appium will appear below.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {registeredDevices.map((device) => (
+                  <React.Fragment key={device.udid}>
+                    <DeviceCard
+                      device={device}
+                      onClick={() => handleOpenDetail(device)}
+                    />
+                  </React.Fragment>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* Unregistered Devices Section */}
+          <section>
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+                새로운 기기
+                <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700">
+                  {unregisteredDevices.length}
+                </span>
+              </h2>
+            </div>
+
+            {dfLoading && unregisteredDevices.length === 0 ? (
+              <div className="text-sm text-slate-500 italic">
+                Scanning for new devices...
+              </div>
+            ) : unregisteredDevices.length === 0 ? (
+              <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-8 text-center">
+                <p className="text-sm text-slate-500">
+                  All connected devices are registered.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {unregisteredDevices.map((device) => (
+                  <React.Fragment key={device.udid}>
+                    <DeviceCard
+                      device={device}
+                      actionButton={
+                        <button
+                          onClick={() => handleOpenRegister(device)}
+                          className="flex w-full items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100 hover:border-blue-300"
+                        >
+                          <IconPlus className="h-4 w-4" />
+                          Register Device
+                        </button>
+                      }
+                    />
+                  </React.Fragment>
+                ))}
+              </div>
+            )}
+          </section>
+        </main>
+
+        {/* Modal */}
+        <RegisterModal
+          open={modalOpen}
+          onClose={() => setModalOpen(false)}
+          initial={selectedDevice}
+          onSaved={handleRegisterSuccess}
+        />
+
+        {/* Detail/Edit Modal */}
+        <DeviceDetailModal
+          open={detailModalOpen}
+          onClose={() => setDetailModalOpen(false)}
+          device={selectedRegisteredDevice}
+          onSaved={handleSuccess}
+        />
       </div>
-
-      {/* 등록 모달 */}
-      <RegisterModal open={regOpen} onClose={() => setRegOpen(false)} initial={regInitial} onSaved={onSaved} />
     </>
   );
 }

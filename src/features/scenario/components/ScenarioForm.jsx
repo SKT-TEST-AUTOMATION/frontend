@@ -1,4 +1,3 @@
-// src/features/scenarios/components/ScenarioForm.jsx
 import { useMemo, useState } from "react";
 
 export default function ScenarioForm({
@@ -195,12 +194,6 @@ export default function ScenarioForm({
                 </li>
               ))}
             </ol>
-
-            {/* {!readOnly && (
-              <p className="mt-2 text-xs text-gray-500">
-                드래그 앤 드롭이 필요하면 추후 react-beautiful-dnd로 대체 가능. 현재는 ▲▼ 버튼으로 순서 변경합니다.
-              </p>
-            )} */}
           </div>
         </div>
       </div>

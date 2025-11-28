@@ -1,0 +1,23 @@
+// tsconfig.json
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+
+    // React + Vite 기본 값
+    "jsx": "react-jsx",
+
+    // JS 파일도 같이 쓸 거면 있으면 편함
+    "allowJs": true,   // .js/.jsx 파일 import 허용
+    "checkJs": false,  // JS까지 타입 체크하고 싶으면 true
+
+    "strict": true,
+    "isolatedModules": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "noEmit": true
+  },
+  "include": ["src"]
+}

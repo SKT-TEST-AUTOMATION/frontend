@@ -7,11 +7,17 @@ export async function getDevices(params = {}, signal) {
     signal,
     params: { page, size, sort },
   });
-  return res;
+  return res?.data?.data ?? res?.data;
 }
 
 // 디바이스 등록
 export async function createDevice(payload) {
   const res = await api.post('devices', payload);
+  return res?.data?.data ?? res?.data;
+}
+
+// 디바이스 등록
+export async function updateDevice(udid, payload) {
+  const res = await api.put(`devices/${udid}`, payload);
   return res?.data?.data ?? res?.data;
 }

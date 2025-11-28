@@ -37,8 +37,8 @@ const COLUMN_HELP = {
   input_text: { title: "input_text", desc: "입력할 텍스트/특수키.", example: "myid123 / \\n (엔터)" },
   visible_if: { title: "visible_if", desc: "이 요소가 보이면 실행. visible_if_type과 함께 사용합니다." },
   skip_on_error: { title: "skip_on_error", desc: "에러 무시 여부.", example: "Y / N (기본 N)" },
-  true_jump_no: {title: "true_jump_no", desc: "이 스텝 성공 시 이동할 스텝 번호"},
-  false_jump_no: {title: "true_jump_no", desc: "이 스텝 실패 시 이동할 스텝 번호"},
+  true_jump_no: { title: "true_jump_no", desc: "이 스텝 성공 시 이동할 스텝 번호" },
+  false_jump_no: { title: "true_jump_no", desc: "이 스텝 실패 시 이동할 스텝 번호" },
   mandatory: { title: "mandatory", desc: "필수 스텝 여부.", example: "Y / N" },
   wait: { title: "wait", desc: "실행 전 대기 시간(초).", example: "2(2초) / 0.5(0.5초)" },
 };
@@ -228,17 +228,12 @@ function widthPxForHeader(h) {
   const baseWidth = (() => {
     const k = lc(h);
     if (isCol(k, "no")) return 80;
-    // if (isCol(k, "wait")) return 100;
-    // if (isCol(k, "false_jump_no") || (isCol(k, "true_jump_no")))return 160;
-    // if (isCol(k, "mandatory") || isCol(k, "skip_on_error") || isCol(k, "action") || isCol(k, "by")) return 130;
-    // if (isCol(k, "input_text")) return 220;
     if (isCol(k, "name")) return 240;
     if (isCol(k, "value") || isCol(k, "memo")) return 360;
     return 150;
   })();
 
-  // ✨ 동적 확장 로직 추가 (문자 수 기반)
-  const dynamic = h.length * 10; // 10px per char (적당한 값)
+  const dynamic = h.length * 10; // 문자 수 기반 동적 확장
   return Math.max(baseWidth, dynamic);
 }
 
@@ -256,19 +251,58 @@ const EditorFor = React.memo(function EditorFor({ headerName, value, onChange, d
 const ROW_HEIGHT = 44; // header 포함
 
 export default function ExcelPreviewEditor({
-  open,
-  onClose,
-  meta,
-  selectedSheet,
-  onChangeSelectedSheet,
-  previewAOA,
-  onChangeCell,
-  onInsertRow,
-  onDeleteRow,
-  onUpload,
-  uploading = false,
-  readOnly = false,
-}) {
+                                             open,
+                                             onClose,
+                                             meta,
+                                             selectedSheet,
+                                             onChangeSelectedSheet,
+                                             previewAOA,
+                                             onChangeCell,
+                                             onInsertRow,
+                                             onDeleteRow,
+                                             onUpload,
+                                             uploading = false,
+                                             readOnly = false,
+                                             onInsertColumn, teatcaseName
+                                           }) {
+
+  // 팝업 열릴 때 body 스크롤 막기
+  useEffect(() => {
+    if (open) {
+      // 현재 스크롤 위치 기억 (iOS에서는 필요함)
+      const scrollY = window.scrollY;
+      document.body.dataset.scrollY = scrollY;
+
+      document.body.style.position = "fixed";
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.left = "0";
+      document.body.style.right = "0";
+      document.body.style.overflow = "hidden"; // 스크롤 막기
+      document.body.style.width = "100%";
+    } else {
+      // 원래 상태로 복구
+      const scrollY = document.body.dataset.scrollY || 0;
+      document.body.style.position = "";
+      document.body.style.top = "";
+      document.body.style.left = "";
+      document.body.style.right = "";
+      document.body.style.overflow = "";
+      document.body.style.width = "";
+      window.scrollTo(0, parseInt(scrollY, 10));
+    }
+
+    return () => {
+      const scrollY = document.body.dataset.scrollY || 0;
+      document.body.style.position = "";
+      document.body.style.top = "";
+      document.body.style.left = "";
+      document.body.style.right = "";
+      document.body.style.overflow = "";
+      document.body.style.width = "";
+      window.scrollTo(0, parseInt(scrollY, 10));
+    };
+  }, [open]);
+
   // ESC로 닫기
   useEffect(() => {
     if (!open) return;
@@ -299,7 +333,6 @@ export default function ExcelPreviewEditor({
     const measure = () => {
       if (gridContainerRef.current) {
         const rect = gridContainerRef.current.getBoundingClientRect();
-        // 약간의 padding 고려해서 조정
         setGridSize({
           width: rect.width,
           height: rect.height,
@@ -313,11 +346,13 @@ export default function ExcelPreviewEditor({
 
   if (!open) return null;
 
-  const rowCount = previewAOA?.length || 0; // 0행: header, 이후 data
-  const columnCount = headers.length + 1; // 0열: control column
+  const rowCount = previewAOA?.length || 0; // 0행: header
+  // 0열: 행 컨트롤, 1..N: 데이터 열, 마지막 열: "열 추가" 컨트롤
+  const columnCount = headers.length + 2;
 
   const columnWidth = ({ index }) => {
-    if (index === 0) return 70; // control column
+    if (index === 0) return 70;                      // 행 컨트롤 열
+    if (index === columnCount - 1) return 56;        // 마지막: 열 추가 버튼 열
     const header = headers[index - 1];
     return widthPxForHeader(header);
   };
@@ -327,12 +362,11 @@ export default function ExcelPreviewEditor({
   const cellRenderer = ({ columnIndex, rowIndex, key, style }) => {
     const isHeaderRow = rowIndex === 0;
     const isFirstCol = columnIndex === 0;
+    const isAddColumnCol = columnIndex === columnCount - 1;
 
-    // previewAOA: rowIndex 그대로 사용 (0 = header)
     const row = previewAOA?.[rowIndex] || [];
-    const headerName = !isFirstCol ? headers[columnIndex - 1] : null;
+    const headerName = (!isFirstCol && !isAddColumnCol) ? headers[columnIndex - 1] : null;
 
-    // 공통 wrapper style
     const baseStyle = {
       ...style,
       display: "flex",
@@ -346,14 +380,40 @@ export default function ExcelPreviewEditor({
     // ─── (0,0) : 좌상단 빈 셀 ───
     if (isHeaderRow && isFirstCol) {
       return (
-        <div key={key} style={baseStyle} className="flex items-center justify-center text-[10px] text-slate-400 bg-slate-50">
-          {/* "no" 헤더를 넣고 싶으면 여기에 텍스트 추가 */}
+        <div
+          key={key}
+          style={baseStyle}
+          className="flex items-center justify-center text-[10px] text-slate-400 bg-slate-50"
+        >
+          {/* 필요하면 "no" 텍스트 등 추가 가능 */}
         </div>
       );
     }
 
-    // ─── 헤더 행 (rowIndex === 0, col >=1) ───
-    if (isHeaderRow && !isFirstCol) {
+    // ─── 헤더의 마지막 열: 열 추가 버튼 ───
+    if (isHeaderRow && isAddColumnCol) {
+      return (
+        <div
+          key={key}
+          style={baseStyle}
+          className="flex items-center justify-center bg-slate-50/80 backdrop-blur"
+        >
+          {!readOnly && (
+            <button
+              type="button"
+              onClick={() => onInsertColumn?.(headers.length)} // 맨 뒤에 추가
+              className="p-1.5 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700 shadow-sm transition"
+              title="맨 마지막에 열 추가"
+            >
+              <PlusIcon className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      );
+    }
+
+    // ─── 일반 헤더 셀 (데이터 헤더) ───
+    if (isHeaderRow && !isFirstCol && !isAddColumnCol) {
       return (
         <div
           key={key}
@@ -368,15 +428,16 @@ export default function ExcelPreviewEditor({
       );
     }
 
-    // ─── 첫 번째 열 (control column, rowIndex >=1) ───
+    // ─── 첫 번째 열 (행 컨트롤, rowIndex >=1) ───
     if (!isHeaderRow && isFirstCol) {
-      const ri = rowIndex; // 1-based data row index (헤더 제외)
+      const ri = rowIndex; // previewAOA 기준 row index (헤더=0, 데이터=1..)
       return (
         <div
           key={key}
           style={{ ...baseStyle, backgroundColor: "#FFFFFF", zIndex: 3 }}
           className="group px-2 flex items-center justify-between bg-white"
         >
+          {/* 행 번호를 보이고 싶으면 여기 추가 */}
           {!readOnly && (
             <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
               <button
@@ -401,8 +462,21 @@ export default function ExcelPreviewEditor({
       );
     }
 
-    // ─── 일반 데이터 셀 (row >=1, col >=1) ───
-    const ri = rowIndex; // previewAOA index
+    // ─── 데이터 영역의 마지막 열(열 추가 컨트롤 열의 바디 부분) ───
+    if (!isHeaderRow && isAddColumnCol) {
+      return (
+        <div
+          key={key}
+          style={baseStyle}
+          className="flex items-center justify-center bg-white"
+        >
+          {/* 바디에서는 비워두거나 안내 문구 추가 가능 */}
+        </div>
+      );
+    }
+
+    // ─── 일반 데이터 셀 (row >=1, col >=1, 마지막 열 아님) ───
+    const ri = rowIndex;  // previewAOA index
     const ci = columnIndex - 1; // header index
     const value = row?.[ci] ?? "";
 
@@ -435,8 +509,8 @@ export default function ExcelPreviewEditor({
         <div className="flex-none px-6 py-4 border-b border-slate-200 bg-white flex items-center justify-between z-30">
           <div className="flex items-center gap-6 overflow-hidden">
             <h2 className="text-lg font-bold text-slate-800 shrink-0 flex items-center gap-2">
-              <span className="w-2 h-6 bg-blue-500 rounded-full block"></span>
-              엑셀 편집기
+              <span className="w-2 h-6 bg-blue-500 rounded-full block" />
+              {teatcaseName}
             </h2>
 
             {/* Sheet Tabs */}
@@ -504,41 +578,39 @@ export default function ExcelPreviewEditor({
             </div>
           ) : (
             <div ref={gridContainerRef} className="flex-1">
-            <MultiGrid
-              cellRenderer={cellRenderer}
-              columnCount={columnCount}
-              rowCount={rowCount}
-              fixedRowCount={1}
-              fixedColumnCount={1}
-              columnWidth={columnWidth}
-              rowHeight={rowHeight}
-              width={gridSize.width}
-              height={gridSize.height}
-              overscanColumnCount={2}
-              overscanRowCount={5}
-              enableFixedRowScroll
-              enableFixedColumnScroll
-
-              style={{ outline: "none" }}
-              containerStyle={{ overflow: "hidden" }}
-
-              styleTopLeftGrid={{
-                outline: "none",
-                overflow: "hidden",
-              }}
-              styleTopRightGrid={{
-                outline: "none",
-                overflow: "hidden",
-              }}
-              styleBottomLeftGrid={{
-                outline: "none",
-                overflow: "hidden",
-              }}
-              styleBottomRightGrid={{
-                outline: "none",
-                overflow: "auto",   // 오직 이 Grid에서만 스크롤 허용
-              }}
-            />
+              <MultiGrid
+                cellRenderer={cellRenderer}
+                columnCount={columnCount}
+                rowCount={rowCount}
+                fixedRowCount={1}
+                fixedColumnCount={1}
+                columnWidth={columnWidth}
+                rowHeight={rowHeight}
+                width={gridSize.width}
+                height={gridSize.height}
+                overscanColumnCount={2}
+                overscanRowCount={5}
+                enableFixedRowScroll
+                enableFixedColumnScroll
+                style={{ outline: "none" }}
+                containerStyle={{ overflow: "hidden" }}
+                styleTopLeftGrid={{
+                  outline: "none",
+                  overflow: "hidden",
+                }}
+                styleTopRightGrid={{
+                  outline: "none",
+                  overflow: "hidden",
+                }}
+                styleBottomLeftGrid={{
+                  outline: "none",
+                  overflow: "hidden",
+                }}
+                styleBottomRightGrid={{
+                  outline: "none",
+                  overflow: "auto", // 오직 이 Grid에서만 스크롤 허용
+                }}
+              />
             </div>
           )}
         </div>
