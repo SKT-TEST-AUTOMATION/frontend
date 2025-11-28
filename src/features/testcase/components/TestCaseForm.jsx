@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import TestCaseExcelTab from "./TestCaseExcelTab";
 import TestCaseInfoTab from "./TestCaseInfoTab";
+import NewTestCaseExcelTab from './NewTestCaseExcelTab.jsx';
 
 /**
  * 공용 폼
@@ -24,7 +25,6 @@ export default function TestCaseForm({
   procedureSteps, setProcedureSteps,
   expectedSteps, setExpectedSteps,
   readOnly = false,
-  isEdit = false,
   headerTabs = true,
   footerActions = null,
   enterAddsStep = true,
@@ -32,25 +32,15 @@ export default function TestCaseForm({
   activeTab: controlledTab,
   setActiveTab: setControlledTab,
   testCaseId,
-  testCaseName,
   excelFileName
 }) {
+
   const inputCls = [
     "w-full px-3 py-2 rounded-md text-sm",
     readOnly
       ? "bg-gray-100 dark:bg-gray-900 border border-gray-200/50 dark:border-gray-700/50 text-gray-500 dark:text-gray-400"
       : "bg-white dark:bg-gray-900 border border-gray-200/70 dark:border-gray-700 text-gray-800 dark:text-gray-100",
   ].join(" ");
-
-  const textAreaProps = (v, key) => ({
-    rows: 4,
-    value: v,
-    onChange: (e) => !readOnly && set({ [key]: e.target.value }),
-    placeholder: readOnly ? undefined : (key === "precondition" ? "선행조건 입력" : key === "navigation" ? "경로 입력" : "입력"),
-    className: inputCls + " resize-none",
-    readOnly,
-    disabled: readOnly,
-  });
 
   // 탭 상태 (controlled/uncontrolled)
   const [innerTab, setInnerTab] = useState(defaultTab);
@@ -108,7 +98,8 @@ export default function TestCaseForm({
         />
       ) : (
         <div className="p-6">
-            <TestCaseExcelTab form={form} testCaseId={testCaseId} excelFileName={excelFileName ?? form?.excelFileName} readOnly={readOnly}/>
+          {/*<TestCaseExcelTab form={form} testCaseId={testCaseId} excelFileName={excelFileName ?? form?.excelFileName} readOnly={readOnly} />*/}
+          <NewTestCaseExcelTab form={form} testCaseId={testCaseId} excelFileName={excelFileName ?? form?.excelFileName} readOnly={readOnly} />
         </div>
       )}
     </div>

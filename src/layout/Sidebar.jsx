@@ -56,7 +56,6 @@ const buildDefaultNav = () => ({
     { label: '이슈 관리', href: '/results/issues' },
   ],
   registry: [
-    // { label: '테스트 레지스트리', href: '/registry' },
     { label: '디바이스 관리', href: '/registry/devices' },
   ],
 });
@@ -69,10 +68,18 @@ const SECTION_META = {
   registry:  { title: '테스트 레지스트리',  icon: 'devices' },
 };
 
-export default function Sidebar({ open, onClose, user = {} }) {
+export default function Sidebar({
+                                  open,               // 모바일 드로어 열림 여부
+                                  onClose,
+                                  user = {},
+                                  nav: navProp,       // AppShell에서 내려주는 nav (선택)
+                                  collapsed = false,  // 데스크톱에서 접힘 여부
+                                  onToggleCollapse,   // 데스크톱에서 토글하는 핸들러 (TopBar에서 호출 예정)
+                                }) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
 
+  // nav: prop 이 있으면 사용, 없으면 기본 네비
   const nav = useMemo(buildDefaultNav, []);
 
   // 섹션 접힘 상태 (효과들보다 위에 선언! TDZ 회피)
@@ -144,13 +151,12 @@ export default function Sidebar({ open, onClose, user = {} }) {
     if (!items.length) return null;
 
     const meta = SECTION_META[sectionKey] ?? { title: sectionKey };
-    const open = isOpen[sectionKey] ?? false;         // 펼침/접힘
+    const openSection = isOpen[sectionKey] ?? false;   // 펼침/접힘
     const active = isSectionActive(sectionKey);        // 경로 기준 선택 상태
 
     const baseWrap =
       'group flex w-full items-center justify-between px-3 py-2.5 text-left text-sm font-semibold rounded-lg transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-blue-300/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900';
 
-    // 요구사항: 선택 시 기존 CSS 유지, 비선택 시 뉴트럴
     const activeWrap =
       'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30';
     const neutralWrap =
@@ -160,7 +166,7 @@ export default function Sidebar({ open, onClose, user = {} }) {
       <div className="mt-2">
         <button
           type="button"
-          aria-expanded={open}
+          aria-expanded={openSection}
           aria-controls={`${sectionKey}-section`}
           className={[baseWrap, active ? activeWrap : neutralWrap].join(' ')}
           onClick={() => toggleSection(sectionKey)}
@@ -169,10 +175,10 @@ export default function Sidebar({ open, onClose, user = {} }) {
             {meta.icon && <SectionIcon name={meta.icon} active={active} />}
             <span>{meta.title}</span>
           </span>
-          <Chevron open={open} />
+          <Chevron open={openSection} />
         </button>
 
-        {open && (
+        {openSection && (
           <div
             id={`${sectionKey}-section`}
             className="mt-2 ml-6 space-y-1 border-l-2 border-slate-100 dark:border-slate-700 pl-4"
@@ -204,7 +210,6 @@ export default function Sidebar({ open, onClose, user = {} }) {
       const raw = localStorage.getItem('qone.sidebar.isOpen');
       if (raw) setIsOpen((prev) => ({ ...prev, ...JSON.parse(raw) }));
     } catch (_) {}
-     
   }, []);
 
   // 열림 상태 저장
@@ -248,7 +253,7 @@ export default function Sidebar({ open, onClose, user = {} }) {
 
   const content = useMemo(
     () => (
-      <div className="flex h-full w-64 flex-col min-h-0 bg-white dark:bg-slate-900 border-r border-slate-200/60 dark:border-slate-700/60 shadow-lg">
+      <div className="flex h-full flex-col min-h-0 bg-white dark:bg-slate-900 border-r border-slate-200/60 dark:border-slate-700/60 shadow-lg">
         {/* Brand (리디자인) */}
         <div
           className="relative flex cursor-pointer items-center gap-3 px-5 h-16 flex-none border-b border-slate-100 dark:border-slate-800 bg-white/90 dark:bg-slate-900/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-slate-900/60"
@@ -258,20 +263,32 @@ export default function Sidebar({ open, onClose, user = {} }) {
           tabIndex={0}
           aria-label="랜딩 화면으로 이동"
         >
-          <div className="relative">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-cyan-500 shadow-md flex items-center justify-center">
-              <span className="text-white font-extrabold tracking-tight">Q</span>
-            </div>
-            <div className="absolute -right-1 -bottom-1 px-1.5 py-0.5 rounded-full text-[10px] leading-none bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200 border border-blue-200/70 dark:border-blue-700/50">
-              One
-            </div>
-          </div>
+
           <div className="min-w-0">
             <h1 className="text-base font-extrabold text-slate-900 dark:text-slate-100 tracking-tight leading-none whitespace-nowrap">
               <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500">Q-One</span>
             </h1>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-none whitespace-nowrap">QA Test Management</p>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-none whitespace-nowrap">
+              QA Test Management
+            </p>
           </div>
+
+          {/* 데스크톱 접기/펼치기 버튼 (옵션) */}
+          {onToggleCollapse && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleCollapse();
+              }}
+              className="ml-auto hidden lg:flex items-center justify-center rounded-full w-10 h-10  border-slate-200 dark:border-slate-700 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              aria-label={collapsed ? '사이드바 펼치기' : '사이드바 숨기기'}
+            >
+              <span className="material-symbols-outlined text-base">
+                {collapsed ? 'chevron_right' : 'chevron_left'}
+              </span>
+            </button>
+          )}
         </div>
 
         {/* Nav (스크롤 섀도 포함) */}
@@ -340,8 +357,12 @@ export default function Sidebar({ open, onClose, user = {} }) {
               <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 border-white dark:border-slate-800 rounded-full" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-semibold text-slate-800 dark:text-slate-100 truncate">{user?.name ?? 'User'}</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{user?.title ?? 'QA Engineer'}</p>
+              <p className="font-semibold text-slate-800 dark:text-slate-100 truncate">
+                {user?.name ?? 'User'}
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                {user?.title ?? 'QA Engineer'}
+              </p>
             </div>
             <button
               type="button"
@@ -354,14 +375,28 @@ export default function Sidebar({ open, onClose, user = {} }) {
         </div>
       </div>
     ),
-    [isOpen, pathname, scroll] // scroll 디펜던시 포함
+    [isOpen, pathname, scroll, user, collapsed] // collapsed 추가(접기 버튼 라벨)
   );
 
   return (
     <>
-      {/* Desktop */}
-      <aside className="relative hidden shrink-0 lg:block">
-        <div className="sticky top-0 h-dvh">{content}</div>
+      {/* Desktop: 접힘/펼침 애니메이션 */}
+      <aside
+        className={[
+          'relative hidden shrink-0 lg:block transition-[width] duration-300',
+          collapsed ? 'w-0' : 'w-64',
+        ].join(' ')}
+      >
+        <div className="sticky top-0 h-dvh overflow-hidden">
+          <div
+            className={[
+              'h-full transition-transform duration-300',
+              collapsed ? '-translate-x-full' : 'translate-x-0',
+            ].join(' ')}
+          >
+            {content}
+          </div>
+        </div>
       </aside>
 
       {/* Mobile drawer */}

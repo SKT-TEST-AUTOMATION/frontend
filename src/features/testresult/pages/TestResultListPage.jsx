@@ -787,6 +787,7 @@ export default function TestResultListPage() {
                           {/* 결과 로그 */}
                           <div className="col-span-12">
                             <RunReportPanel
+                              testName={testName}
                               runId={id}
                               live={false}
                               resultLog={resultLog}

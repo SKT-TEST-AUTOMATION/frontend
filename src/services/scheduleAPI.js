@@ -36,3 +36,4 @@ export async function deleteSchedule(id) {
   const res = await api.delete(`scenarios/test-schedules/${id}?userId=1`);
   return res?.data?.data ?? res?.data;
 }
+

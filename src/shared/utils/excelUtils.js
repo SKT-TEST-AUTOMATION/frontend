@@ -4,17 +4,17 @@ import * as XLSX from "xlsx";
  * 엑셀 파일을 읽어 시트 목록과 시트별 미리보기 데이터를 반환합니다.
  * @param {File|Blob|ArrayBuffer} file 업로드 파일
  * @param {Object} opts 옵션
- * @param {number} opts.maxRows 미리보기 최대 행수 (기본 200)
+ * @param {number} opts.maxRows 미리보기 최대 행수 (기본 500)
  * @param {boolean} opts.trimCells 셀 앞뒤 공백 제거 (기본 true)
  * @returns {Promise<{sheets:string[], previewBySheet:Record<string,string[][]>, headerBySheet:Record<string,string[]>}>}
  */
 export async function readExcelFile(file, opts = {}) {
-  const { maxRows = 200, trimCells = true } = opts;
+  const { maxRows = 500, trimCells = true } = opts;
 
   const buf = file instanceof ArrayBuffer ? file : await file.arrayBuffer();
   const wb = XLSX.read(buf, {
     type: "array",
-    sheetRows: Math.min(maxRows, 200),   // ★ 200행만 읽음
+    sheetRows: Math.min(maxRows, 500),
   });
 
   const sheetNames = wb.SheetNames || [];
@@ -71,6 +71,24 @@ export function buildXlsxFromAOA(sheetName, aoa) {
   return new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
 }
 
+export function buildXlsxFromSheets(sheets) {
+  const workbook = XLSX.utils.book_new();
+
+  Object.entries(sheets).forEach(([sheetName, sheetData]) => {
+    const worksheet = XLSX.utils.aoa_to_sheet(sheetData || [[""]]);
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+  });
+
+  // ArrayBuffer 형태로 쓰기
+  const wbout = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
+
+  // Blob으로 감싸서 반환
+  return new Blob([wbout], {
+    type:
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+}
+
 /**
  * 편집용 초기 시트 AOA 생성 유틸.
  *
@@ -107,3 +125,83 @@ export function buildInitialSheetAOA(headers, dataRows = [], opts = {}) {
 
   return [safeHeaders, ...rows];
 }
+
+
+/**
+ * ================
+ */
+
+
+// 컬럼 인덱스를 엑셀 헤더로 변환 (0 -> A, 26 -> AA)
+export const getColumnHeader = (index) => {
+  let dividend = index + 1;
+  let columnName = "";
+  let modulo;
+
+  while (dividend > 0) {
+    modulo = (dividend - 1) % 26;
+    columnName = String.fromCharCode(65 + modulo) + columnName;
+    dividend = Math.floor((dividend - 1) / 26);
+  }
+  return columnName;
+};
+
+// 데이터를 직사각형 형태로 정규화 (모든 행의 길이를 동일하게)
+export const normalizeSheetData = (data) => {
+  if (!data || data.length === 0) return [[""]];
+
+  const maxCols = data.reduce((max, row) => Math.max(max, row.length), 0);
+
+  return data.map((row) => {
+    const newRow = [...row];
+    while (newRow.length < maxCols) {
+      newRow.push("");
+    }
+    return newRow;
+  });
+};
+
+// 파일 읽기: Excel → { sheets, sheetNames }
+export const readFile = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      try {
+        const data = e.target?.result;
+        const workbook = XLSX.read(data, { type: "binary" });
+
+        const sheets = {};
+        const sheetNames = workbook.SheetNames;
+
+        sheetNames.forEach((name) => {
+          const worksheet = workbook.Sheets[name];
+          const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+          sheets[name] = normalizeSheetData(jsonData);
+        });
+
+        resolve({ sheets, sheetNames });
+      } catch (error) {
+        reject(error);
+      }
+    };
+
+    reader.onerror = (error) => reject(error);
+    reader.readAsBinaryString(file);
+  });
+};
+
+// 파일 저장: { sheets } → Excel 파일 다운로드
+export const saveFile = (sheets, fileName) => {
+  const workbook = XLSX.utils.book_new();
+
+  Object.entries(sheets).forEach(([sheetName, sheetData]) => {
+    const worksheet = XLSX.utils.aoa_to_sheet(sheetData);
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+  });
+
+  XLSX.writeFile(
+    workbook,
+    fileName.endsWith(".xlsx") ? fileName : `${fileName}.xlsx`
+  );
+};
