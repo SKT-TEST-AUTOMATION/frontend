@@ -307,41 +307,41 @@ export default function TestScheduleListPage() {
           </div>
         </div>
         {/* 하단 오른쪽: 일괄 버튼들 */}
-        <div className="mt-3 flex items-center justify-end gap-2">
-          <button
-            onClick={bulkDisable}
-            disabled={selectedIds.size === 0}
-            className={[
-              "inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg",
-              "border border-amber-300 text-amber-700 dark:text-amber-300",
-              "bg-amber-50/60 dark:bg-amber-900/20",
-              "hover:bg-amber-100 dark:hover:bg-amber-900/30",
-              "focus:outline-none focus:ring-2 focus:ring-amber-300/60",
-              "disabled:opacity-50 disabled:cursor-not-allowed"
-            ].join(" ")}
-            title={selectedIds.size ? "" : "선택된 스케줄이 없습니다"}
-          >
-            <span className="material-symbols-outlined text-[18px]">pause_circle</span>
-            일괄 비활성화
-          </button>
+        {/*<div className="mt-3 flex items-center justify-end gap-2">*/}
+        {/*  <button*/}
+        {/*    onClick={bulkDisable}*/}
+        {/*    disabled={selectedIds.size === 0}*/}
+        {/*    className={[*/}
+        {/*      "inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg",*/}
+        {/*      "border border-amber-300 text-amber-700 dark:text-amber-300",*/}
+        {/*      "bg-amber-50/60 dark:bg-amber-900/20",*/}
+        {/*      "hover:bg-amber-100 dark:hover:bg-amber-900/30",*/}
+        {/*      "focus:outline-none focus:ring-2 focus:ring-amber-300/60",*/}
+        {/*      "disabled:opacity-50 disabled:cursor-not-allowed"*/}
+        {/*    ].join(" ")}*/}
+        {/*    title={selectedIds.size ? "" : "선택된 스케줄이 없습니다"}*/}
+        {/*  >*/}
+        {/*    <span className="material-symbols-outlined text-[18px]">pause_circle</span>*/}
+        {/*    일괄 비활성화*/}
+        {/*  </button>*/}
 
-          <button
-            onClick={bulkDelete}
-            disabled={selectedIds.size === 0}
-            className={[
-              "inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg",
-              "border border-rose-300 text-rose-700 dark:text-rose-300",
-              "bg-rose-50/60 dark:bg-rose-900/20",
-              "hover:bg-rose-100 dark:hover:bg-rose-900/30",
-              "focus:outline-none focus:ring-2 focus:ring-rose-300/60",
-              "disabled:opacity-50 disabled:cursor-not-allowed"
-            ].join(" ")}
-            title={selectedIds.size ? "" : "선택된 스케줄이 없습니다"}
-          >
-            <span className="material-symbols-outlined text-[18px]">delete</span>
-            일괄 삭제
-          </button>
-        </div>
+        {/*  <button*/}
+        {/*    onClick={bulkDelete}*/}
+        {/*    disabled={selectedIds.size === 0}*/}
+        {/*    className={[*/}
+        {/*      "inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg",*/}
+        {/*      "border border-rose-300 text-rose-700 dark:text-rose-300",*/}
+        {/*      "bg-rose-50/60 dark:bg-rose-900/20",*/}
+        {/*      "hover:bg-rose-100 dark:hover:bg-rose-900/30",*/}
+        {/*      "focus:outline-none focus:ring-2 focus:ring-rose-300/60",*/}
+        {/*      "disabled:opacity-50 disabled:cursor-not-allowed"*/}
+        {/*    ].join(" ")}*/}
+        {/*    title={selectedIds.size ? "" : "선택된 스케줄이 없습니다"}*/}
+        {/*  >*/}
+        {/*    <span className="material-symbols-outlined text-[18px]">delete</span>*/}
+        {/*    일괄 삭제*/}
+        {/*  </button>*/}
+        {/*</div>*/}
       </div>
 
       {/* 목록 */}

@@ -1,14 +1,17 @@
 // src/features/schedule/pages/TestScheduleDetailPage.jsx
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import PageHeader from "../../../shared/components/PageHeader";
 import { useToast } from "../../../shared/hooks/useToast";
 import {
   getTestSchedule,
   updateScheduleStatus,
   deleteSchedule,
 } from "../../../services/scheduleAPI";
+import PageHeader from "../../../shared/components/PageHeader.jsx";
 
+// ──────────────────────────────────────────────
+// 유틸
+// ──────────────────────────────────────────────
 const WEEKDAYS = [
   { label: "월", bit: 0 },
   { label: "화", bit: 1 },
@@ -19,58 +22,70 @@ const WEEKDAYS = [
   { label: "일", bit: 6 },
 ];
 
-function cls(...xs) { return xs.filter(Boolean).join(" "); }
-const fmtDate = (d) => (!d ? "-" : /^\d{4}-\d{2}-\d{2}$/.test(String(d)) ? String(d) : (new Date(d)).toISOString().slice(0,10));
-const fmtTime = (t) => (!t ? "--:--" : (String(t).match(/^(\d{2}:\d{2})(:\d{2})?$/)?.[1] ?? String(t)));
+function cls(...xs) {
+  return xs.filter(Boolean).join(" ");
+}
 
-function SoftBadge({ tone="slate", icon, children }) {
-  const map = {
-    blue:   "bg-blue-50 text-blue-700 border-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800",
-    green:  "bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800",
-    red:    "bg-rose-50 text-rose-700 border-rose-100 dark:bg-rose-900/30 dark:text-rose-300 dark:border-rose-800",
-    amber:  "bg-amber-50 text-amber-700 border-amber-100 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800",
-    slate:  "bg-slate-50 text-slate-700 border-slate-100 dark:bg-slate-800/60 dark:text-slate-200 dark:border-slate-700",
-  };
+const fmtDate = (d) =>
+  !d
+    ? "-"
+    : /^\d{4}-\d{2}-\d{2}$/.test(String(d))
+      ? String(d)
+      : new Date(d).toISOString().slice(0, 10);
+
+const fmtTime = (t) =>
+  !t
+    ? "--:--"
+    : String(t).match(/^(\d{2}:\d{2})(:\d{2})?$/)?.[1] ?? String(t);
+
+// ──────────────────────────────────────────────
+// 상태 배지
+// ──────────────────────────────────────────────
+const StatusBadge = ({ status }) => {
+  const v = String(status || "").toUpperCase();
+  let text = v || "UNKNOWN";
+  let tone =
+    v === "ACTIVE"
+      ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+      : v === "EXPIRED"
+        ? "bg-rose-50 text-rose-700 border-rose-100"
+        : "bg-gray-50 text-gray-600 border-gray-200";
+  let icon =
+    v === "ACTIVE"
+      ? "play_circle"
+      : v === "EXPIRED"
+        ? "cancel"
+        : "pause_circle";
+
   return (
-    <span className={cls(
-      "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium",
-      map[tone]
-    )}>
-      {icon && <span className="material-symbols-outlined text-sm">{icon}</span>}
-      {children}
+    <span
+      className={cls(
+        "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border",
+        tone
+      )}
+    >
+      <span className="material-symbols-outlined text-[15px]">{icon}</span>
+      {text}
     </span>
   );
-}
+};
 
-function StatusPill({ status }) {
-  const tone = status === "ACTIVE" ? "green" : status === "EXPIRED" ? "red" : "slate";
-  return <SoftBadge tone={tone} icon="fiber_manual_record">{status ?? "-"}</SoftBadge>;
-}
-
-function KVP({ k, v, mono }) {
-  return (
-    <div className="flex items-center justify-between py-1.5">
-      <span className="text-sm text-gray-600 dark:text-gray-300">{k}</span>
-      <span className={cls("text-sm text-gray-900 dark:text-gray-100", mono && "font-mono")}>
-        {typeof v === "undefined" || v === null ? "-" : v}
-      </span>
-    </div>
-  );
-}
-
-function DayMask({ mask=0 }) {
+// ──────────────────────────────────────────────
+// 요일 마스크
+// ──────────────────────────────────────────────
+const DayMask = ({ mask = 0 }) => {
   return (
     <div className="flex flex-wrap gap-1.5">
       {WEEKDAYS.map(({ label, bit }) => {
-        const on = (mask & (1<<bit)) !== 0;
+        const on = (mask & (1 << bit)) !== 0;
         return (
           <span
             key={bit}
             className={cls(
-              "inline-flex px-2 py-1 rounded-full text-xs border transition-colors",
+              "inline-flex px-2.5 py-1 rounded-full text-xs border transition-colors",
               on
-                ? "bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/30 dark:border-blue-800 dark:text-blue-300"
-                : "bg-white border-gray-200 text-gray-500 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400"
+                ? "bg-blue-50 border-blue-200 text-blue-700"
+                : "bg-white border-gray-200 text-gray-500"
             )}
           >
             {label}
@@ -79,101 +94,117 @@ function DayMask({ mask=0 }) {
       })}
     </div>
   );
-}
+};
 
-function Section({ title, children, defaultOpen=true }) {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between px-4 py-3"
-      >
-        <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{title}</span>
-        <span className="material-symbols-outlined text-gray-500">{open ? "expand_less" : "expand_more"}</span>
-      </button>
-      {open && <div className="px-4 pb-4">{children}</div>}
+// ──────────────────────────────────────────────
+// InfoCard (ScenarioTestDetailPage 패턴 재사용)
+// ──────────────────────────────────────────────
+const InfoCard = ({ label, value, icon, subValue }) => (
+  <div className="flex items-start gap-3 p-4 bg-white rounded-xl border border-gray-100 shadow-sm">
+    {icon && (
+      <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gray-50 text-gray-500 border border-gray-100">
+        <span className="material-symbols-outlined text-lg">{icon}</span>
+      </div>
+    )}
+    <div className="flex-1 min-w-0">
+      <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">
+        {label}
+      </p>
+      <div className="mt-1 text-sm font-semibold text-gray-900 truncate">
+        {value ?? "-"}
+      </div>
+      {subValue && (
+        <p className="text-xs text-gray-400 mt-0.5 truncate">{subValue}</p>
+      )}
     </div>
-  );
-}
+  </div>
+);
 
-function SummaryStrip({ dto }) {
-  const type = dto?.scheduleType;
-  const humanType = type === "ONCE" ? "한 번" : type === "DAILY" ? "매일" : "매주";
-  const time = fmtTime(dto?.executeTime);
-  const range = type === "ONCE" ? fmtDate(dto?.startDate) : `${fmtDate(dto?.startDate)} ~ ${fmtDate(dto?.endDate)}`;
-  const interval = (dto?.intervalMinutes && dto?.intervalTimes) ? `${dto.intervalMinutes}분 × ${dto.intervalTimes}회` : "없음";
-  const weekdays = type === "WEEKLY" && dto?.weeklyDaysMask
-    ? WEEKDAYS.filter(w => (dto.weeklyDaysMask & (1<<w.bit)) !== 0).map(w => w.label).join("·")
-    : null;
+// ──────────────────────────────────────────────
+// Key-Value Pair
+// ──────────────────────────────────────────────
+const KVP = ({ k, v, mono }) => (
+  <div className="flex items-center justify-between py-1.5">
+    <span className="text-sm text-gray-600">{k}</span>
+    <span
+      className={cls(
+        "text-sm text-gray-900",
+        mono && "font-mono text-[13px]"
+      )}
+    >
+      {v ?? "-"}
+    </span>
+  </div>
+);
 
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <SoftBadge tone="slate" icon="repeat">{humanType}</SoftBadge>
-      <SoftBadge tone="blue" icon="schedule">{time}</SoftBadge>
-      <SoftBadge tone="slate" icon="calendar_month">{range}</SoftBadge>
-      {weekdays && <SoftBadge tone="slate" icon="event_repeat">{weekdays}</SoftBadge>}
-      <SoftBadge tone="amber" icon="timelapse">인터벌: {interval}</SoftBadge>
-    </div>
-  );
-}
-
-function ActionBar({ dto, onRefresh, onError }) {
-  const { showToast } = useToast();
+// ──────────────────────────────────────────────
+// 상단 액션 바 (상태 토글 / 삭제)
+// ──────────────────────────────────────────────
+const ActionBar = ({ dto, onRefresh }) => {
+  const { showSuccess, showError } = useToast();
   const [busy, setBusy] = useState(false);
   const isActive = dto?.scheduleStatus === "ACTIVE";
-  const next = isActive ? "INACTIVE" : "ACTIVE";
+  const nextStatus = isActive ? "INACTIVE" : "ACTIVE";
 
-  const onToggle = async () => {
+  const handleToggle = async () => {
+    if (!dto) return;
     try {
       setBusy(true);
-      await updateScheduleStatus(dto.id, next);
-      showToast("success", `상태가 ${next}로 변경되었습니다.`);
-      onRefresh && onRefresh();
+      await updateScheduleStatus(dto.id, nextStatus);
+      showSuccess(`상태가 ${nextStatus}로 변경되었습니다.`);
+      onRefresh?.();
     } catch (e) {
-      onError?.(e?.message || "상태 변경 실패");
+      showError("상태 변경 실패", e?.message);
     } finally {
       setBusy(false);
     }
   };
 
-  const onDelete = async () => {
-    if (!confirm("이 스케줄을 삭제하시겠습니까?")) return;
+  const handleDelete = async () => {
+    if (!dto) return;
+    if (!window.confirm("이 스케줄을 삭제하시겠습니까?")) return;
     try {
       setBusy(true);
       await deleteSchedule(dto.id);
-      showToast("success", "스케줄이 삭제되었습니다.");
+      showSuccess("스케줄이 삭제되었습니다.");
       window.history.back();
     } catch (e) {
-      onError?.(e?.message || "삭제 실패");
+      showError("삭제 실패", e?.message);
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       <button
-        onClick={onToggle}
+        type="button"
+        onClick={handleToggle}
         disabled={busy}
         className={cls(
-          "inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm text-white shadow-sm",
-          busy ? "bg-slate-400 cursor-not-allowed"
-            : isActive ? "bg-slate-700 hover:bg-slate-800"
+          "inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium text-white shadow-sm",
+          busy
+            ? "bg-gray-400 cursor-not-allowed"
+            : isActive
+              ? "bg-gray-800 hover:bg-gray-900"
               : "bg-emerald-600 hover:bg-emerald-700"
         )}
       >
-        <span className="material-symbols-outlined text-base">{isActive ? "pause_circle" : "play_arrow"}</span>
+        <span className="material-symbols-outlined text-base">
+          {isActive ? "pause_circle" : "play_arrow"}
+        </span>
         {isActive ? "비활성화" : "활성화"}
       </button>
+
       <button
-        onClick={onDelete}
+        type="button"
+        onClick={handleDelete}
         disabled={busy}
         className={cls(
-          "inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm border shadow-sm",
-          busy ? "opacity-60 cursor-not-allowed"
-            : "border-rose-300 text-rose-600 hover:bg-rose-50 dark:border-rose-700 dark:text-rose-300 dark:hover:bg-rose-900/20"
+          "inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border shadow-sm",
+          busy
+            ? "opacity-60 cursor-not-allowed"
+            : "border-rose-300 text-rose-600 hover:bg-rose-50"
         )}
       >
         <span className="material-symbols-outlined text-base">delete</span>
@@ -181,155 +212,334 @@ function ActionBar({ dto, onRefresh, onError }) {
       </button>
     </div>
   );
-}
+};
 
+// ──────────────────────────────────────────────
+// 메인 페이지
+// ──────────────────────────────────────────────
 export default function TestScheduleDetailPage({ scheduleId: scheduleIdProp }) {
-  const { showToast } = useToast();
+  const { showError } = useToast();
   const params = useParams();
   const navigate = useNavigate();
+
   const scheduleId = scheduleIdProp ?? Number(params?.scheduleId);
   const [dto, setDto] = useState(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
-  const fetchData = useCallback(async () => {
-    if (!scheduleId) return;
-    const controller = new AbortController();
-    try {
+  const fetchData = useCallback(
+    async (signal) => {
+      if (!scheduleId) return;
       setLoading(true);
       setErr("");
-      const data = await getTestSchedule(scheduleId, controller.signal);
-      setDto(data);
-    } catch (e) {
-      setErr(e?.message || "스케줄 정보를 불러오지 못했습니다.");
-    } finally {
-      setLoading(false);
-    }
-    return () => controller.abort();
-  }, [scheduleId]);
+      try {
+        const data = await getTestSchedule(scheduleId, signal);
+        setDto(data);
+      } catch (e) {
+        if (e?.message === "Aborted") return;
+        const msg = e?.message || "스케줄 정보를 불러오지 못했습니다.";
+        setErr(msg);
+        showError("조회 실패", msg);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [scheduleId, showError]
+  );
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchData(controller.signal);
+    return () => controller.abort();
+  }, [fetchData]);
 
   const lastRun = useMemo(() => {
     if (!dto) return null;
-    return { id: dto.lastRunId, at: dto.lastRunAt ? new Date(dto.lastRunAt).toLocaleString() : null };
+    return {
+      id: dto.lastRunId,
+      at: dto.lastRunAt ? new Date(dto.lastRunAt).toLocaleString() : null,
+    };
   }, [dto]);
 
-  return (
-    <div className="min-h-screen bg-gradient-to-b from-white to-gray-50 dark:from-gray-900 dark:to-gray-950">
-      {/* 헤더 영역: 더 넓게, 더 심플하게 */}
-      <div className="sticky top-0 z-10 backdrop-blur supports-[backdrop-filter]:bg-white/70 dark:supports-[backdrop-filter]:bg-gray-900/70 border-b border-gray-200/70 dark:border-gray-800">
-        <div className="max-w-screen-xl mx-auto px-5 py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => navigate(-1)}
-                className="inline-flex items-center px-2 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800"
-                title="뒤로"
-              >
-                <span className="material-symbols-outlined">chevron_left</span>
-              </button>
-              <div>
-                <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
-                  {dto?.name || `스케줄 #${scheduleId ?? "-"}`}
-                </h1>
-                <p className="text-sm text-gray-500 dark:text-gray-400">스케줄 상세 정보를 확인합니다.</p>
-              </div>
-            </div>
-            {dto && <ActionBar dto={dto} onRefresh={fetchData} onError={(m)=>setErr(m)} />}
-          </div>
+  const nextRunInfo = useMemo(() => {
+    if (!dto?.nextRunAt) return { label: "-", relative: "" };
+    const d = new Date(dto.nextRunAt);
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    const label = `${fmtDate(d)} ${hh}:${mm}`;
+
+    const today = new Date();
+    const baseToday = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate()
+    );
+    const baseTarget = new Date(
+      d.getFullYear(),
+      d.getMonth(),
+      d.getDate()
+    );
+    const diffDays = Math.round(
+      (baseTarget - baseToday) / (1000 * 60 * 60 * 24)
+    );
+
+    let relative = "";
+    if (diffDays === 0) relative = "오늘";
+    else if (diffDays === 1) relative = "내일";
+    else if (diffDays > 1) relative = `${diffDays}일 후`;
+    else relative = `${Math.abs(diffDays)}일 전`;
+
+    return { label, relative };
+  }, [dto]);
+
+  // 로딩 스켈레톤
+  if (loading && !dto) {
+    return (
+      <div className="max-w-6xl mx-auto px-6 py-8 animate-pulse">
+        <div className="h-8 w-1/3 bg-gray-200 rounded mb-8" />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="col-span-2 h-40 bg-gray-200 rounded-2xl" />
+          <div className="h-40 bg-gray-200 rounded-2xl" />
         </div>
       </div>
+    );
+  }
 
-      <div className="max-w-screen-xl mx-auto px-5 py-6 space-y-6">
-        {err && (
-          <div className="rounded-xl border border-rose-300 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-900/30 dark:text-rose-200 px-4 py-3 text-sm">
-            {err}
-          </div>
-        )}
+  // 에러 화면
+  if (!loading && err && !dto) {
+    return (
+      <div className="max-w-6xl mx-auto px-6 py-12 text-center">
+        <span className="material-symbols-outlined text-6xl text-gray-300 mb-4">
+          error_outline
+        </span>
+        <h2 className="text-xl font-semibold text-gray-900 mb-2">
+          스케줄 정보를 불러오지 못했습니다
+        </h2>
+        <p className="text-gray-500 mb-6">{err}</p>
+        <button
+          onClick={() => fetchData()}
+          className="px-4 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium"
+        >
+          재시도
+        </button>
+      </div>
+    );
+  }
 
-        {loading ? (
-          <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 shadow-sm animate-pulse">
-            <div className="h-4 w-56 bg-gray-200 dark:bg-gray-700 rounded mb-3" />
-            <div className="h-3 w-80 bg-gray-200 dark:bg-gray-700 rounded" />
-          </div>
-        ) : dto ? (
-          <>
-            {/* 요약 스트립 */}
-            <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 shadow-sm">
-              <div className="flex items-center justify-between">
-                <SummaryStrip dto={dto} />
-                <StatusPill status={dto.scheduleStatus} />
-              </div>
-            </div>
+  return (
+    <div className="flex flex-col gap-6 px-6 py-8 bg-gray-50 min-h-screen">
+      <PageHeader
+        title="테스트 스케줄 상세"
+        subtitle="자동 실행 스케줄의 설정과 상태를 확인합니다."
+        breadcrumbs={[
+          { label: "홈", to: "/" },
+          { label: "테스트 스케줄", to: "/schedules" },
+          { label: dto?.name || `스케줄 #${scheduleId ?? "-"}` },
+        ]}
+        actions={dto && <ActionBar dto={dto} onRefresh={() => fetchData()} />}
+      />
 
-            {/* 기본 정보 카드 2열 */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 shadow-sm">
-                <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">기본 정보</div>
-                <div className="divide-y divide-gray-100 dark:divide-gray-700/60">
-                  <KVP k="스케줄 ID" v={dto.id} mono />
-                  <KVP k="스케줄 이름" v={dto.name} />
-                  <KVP k="반복 주기" v={dto.scheduleType} />
-                  <KVP k="실행 시각" v={fmtTime(dto.executeTime)} />
-                  <KVP k="타임존" v={dto.timezone} />
-                  <KVP
-                    k={dto.scheduleType === "ONCE" ? "예약 일자" : "유효 기간"}
-                    v={dto.scheduleType === "ONCE" ? fmtDate(dto.startDate) : `${fmtDate(dto.startDate)} ~ ${fmtDate(dto.endDate)}`}
-                  />
+      {dto && (
+        <div className="max-w-6xl mx-auto w-full space-y-6">
+          {/* 상단 요약 카드 (ScenarioTestDetailPage 스타일) */}
+          <div className="bg-white border border-gray-200 rounded-2xl px-6 py-5 shadow-sm">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+              {/* 왼쪽: 기본 정보 */}
+              <div className="flex items-start gap-4 min-w-0">
+                <button
+                  type="button"
+                  onClick={() => navigate(-1)}
+                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 shrink-0"
+                  title="뒤로"
+                >
+                  <span className="material-symbols-outlined">chevron_left</span>
+                </button>
+
+                <div className="space-y-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-gray-50 text-gray-700 border border-gray-200">
+                      {dto.scheduleType || "TYPE"}
+                    </span>
+                    <StatusBadge status={dto.scheduleStatus} />
+                    <span className="text-[11px] text-gray-500">
+                      ID: <span className="font-mono">{dto.id}</span>
+                    </span>
+                  </div>
+                  <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 truncate">
+                    {dto.name || `스케줄 #${dto.id}`}
+                  </h1>
+                  <p className="text-xs sm:text-sm text-gray-600">
+                    {fmtDate(dto.startDate)} ~ {fmtDate(dto.endDate)} 기준으로{" "}
+                    <span className="font-medium">{dto.timezone || "기본 타임존"}</span>
+                    에 맞춰 실행됩니다.
+                  </p>
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 shadow-sm">
-                <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">실행/인터벌</div>
-                <div className="divide-y divide-gray-100 dark:divide-gray-700/60">
-                  <KVP
-                    k="인터벌"
-                    v={(dto.intervalMinutes && dto.intervalTimes) ? `${dto.intervalMinutes}분 × ${dto.intervalTimes}회` : "없음"}
-                  />
-                  <KVP
-                    k="최근 실행"
-                    v={lastRun?.id ? `#${lastRun.id}${lastRun.at ? ` • ${lastRun.at}` : ""}` : "실행 이력 없음"}
-                  />
-                  <KVP k="상태" v={<StatusPill status={dto.scheduleStatus} />} />
+              {/* 오른쪽: 다음 실행 / 실행 시간 */}
+              <div className="flex items-stretch gap-8 lg:pl-6 lg:border-l lg:border-gray-200">
+                <div className="text-right">
+                  <div className="text-[11px] text-gray-500 font-medium">
+                    다음 실행 예정
+                  </div>
+                  <div className="mt-1 text-lg sm:text-xl font-semibold text-gray-900">
+                    {nextRunInfo.label}
+                  </div>
+                  <div className="mt-0.5 text-[11px] text-gray-500">
+                    {nextRunInfo.relative || "스케줄 설정에 따라 달라집니다"}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-[11px] text-gray-500 font-medium">
+                    기본 실행 시간
+                  </div>
+                  <div className="mt-1 text-2xl font-semibold text-gray-900">
+                    {fmtTime(dto.executeTime)}
+                  </div>
+                  <div className="mt-0.5 text-[11px] text-gray-500">
+                    {dto.intervalMinutes && dto.intervalTimes
+                      ? `${dto.intervalMinutes}분 간격 / 최대 ${dto.intervalTimes}회`
+                      : "고정 시간 실행"}
+                  </div>
                 </div>
               </div>
             </div>
+          </div>
 
-            {/* WEEKLY 전용 섹션 */}
-            {dto.scheduleType === "WEEKLY" && (
-              <Section title="요일 마스크" defaultOpen={true}>
-                <DayMask mask={dto.weeklyDaysMask || 0} />
-                {!dto.weeklyDaysMask && (
-                  <p className="mt-2 text-xs text-amber-600 dark:text-amber-300">* 요일이 선택되지 않아 실행되지 않을 수 있습니다.</p>
-                )}
-              </Section>
-            )}
+          {/* 중간 InfoCard 그리드 */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <InfoCard
+              label="스케줄 ID"
+              value={dto.id}
+              icon="tag"
+              subValue={dto.scheduleStatus}
+            />
+            <InfoCard
+              label="생성일"
+              value={fmtDate(dto.createdAt)}
+              icon="calendar_today"
+              subValue={dto.timezone || "-"}
+            />
+            <InfoCard
+              label="기간"
+              value={`${fmtDate(dto.startDate)} ~ ${fmtDate(dto.endDate)}`}
+              icon="date_range"
+              subValue="시작일 / 종료일"
+            />
+            <InfoCard
+              label="인터벌"
+              value={
+                dto.intervalMinutes && dto.intervalTimes
+                  ? `${dto.intervalMinutes}분 / ${dto.intervalTimes}회`
+                  : "설정 없음"
+              }
+              icon="timelapse"
+              subValue={
+                dto.scheduleType === "INTERVAL"
+                  ? "INTERVAL 스케줄"
+                  : "고정 시간 스케줄"
+              }
+            />
+          </div>
 
-            {/* 실행 이력 요약 (토글 섹션) */}
-            <Section title="실행 이력 요약" defaultOpen={false}>
-              <div className="text-sm text-gray-600 dark:text-gray-300">
-                최근 실행 ID: {lastRun?.id ? `#${lastRun.id}` : "-"}{lastRun?.at ? ` • ${lastRun.at}` : ""}
+          {/* 상세 정보 카드 + (추가 정보 영역) */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* 기본 정보 */}
+            <div className="lg:col-span-2 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+              <div className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                <span className="material-symbols-outlined text-base">
+                  info
+                </span>
+                <span>기본 정보</span>
               </div>
-              {lastRun?.id && (
-                <div className="mt-2">
+              <div className="divide-y divide-gray-100">
+                <KVP k="스케줄 ID" v={dto.id} mono />
+                <KVP
+                  k="생성일 / 타임존"
+                  v={`${fmtDate(dto.createdAt)} / ${
+                    dto.timezone || "-"
+                  }`}
+                />
+                <KVP k="시작일" v={fmtDate(dto.startDate)} />
+                <KVP k="종료일" v={fmtDate(dto.endDate)} />
+                <KVP k="실행 타입" v={dto.scheduleType || "-"} />
+                <KVP k="실행 시간" v={fmtTime(dto.executeTime)} />
+                <KVP
+                  k="인터벌 설정"
+                  v={
+                    dto.intervalMinutes && dto.intervalTimes
+                      ? `${dto.intervalMinutes}분 / ${dto.intervalTimes}회`
+                      : "없음"
+                  }
+                />
+                <KVP k="설명" v={dto.description || "-"} />
+              </div>
+            </div>
+
+            {/* 오른쪽 사이드: 마지막 실행 결과 + WEEKLY 요일 마스크 */}
+            <div className="space-y-4">
+              {/* 마지막 실행 결과 */}
+              <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+                <div className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-base">
+                    history
+                  </span>
+                  <span>마지막 실행 결과</span>
+                </div>
+                <div className="space-y-2 text-sm">
+                  <KVP
+                    k="Run ID"
+                    v={lastRun?.id ? `#${lastRun.id}` : "-"}
+                    mono
+                  />
+                  <KVP
+                    k="실행 시간"
+                    v={lastRun?.at || "-"}
+                  />
+                </div>
+                <div className="mt-4">
                   <button
-                    onClick={() => navigate(`/runs/${lastRun.id}`)}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm"
+                    type="button"
+                    disabled={!lastRun?.id}
+                    onClick={() =>
+                      lastRun?.id && navigate(`/runs/${lastRun.id}`)
+                    }
+                    className={cls(
+                      "inline-flex items-center justify-center gap-1.5 w-full px-3 py-2 rounded-xl text-sm border shadow-sm",
+                      lastRun?.id
+                        ? "border-gray-300 text-gray-900 hover:bg-gray-50"
+                        : "border-gray-200 text-gray-400 bg-gray-50 cursor-not-allowed"
+                    )}
                   >
-                    <span className="material-symbols-outlined text-base">receipt_long</span>
-                    실행 상세 보기
+                    <span className="material-symbols-outlined text-base">
+                      receipt_long
+                    </span>
+                    <span>상세 리포트 보기</span>
                   </button>
                 </div>
+              </div>
+
+              {/* WEEKLY 스케줄일 경우 요일 마스크 */}
+              {dto.scheduleType === "WEEKLY" && (
+                <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+                  <div className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-base">
+                      calendar_view_week
+                    </span>
+                    <span>요일 마스크</span>
+                  </div>
+                  <DayMask mask={dto.weeklyDaysMask || 0} />
+                  {!dto.weeklyDaysMask && (
+                    <p className="mt-2 text-xs text-amber-600">
+                      * 요일이 선택되지 않아 실행되지 않을 수 있습니다.
+                    </p>
+                  )}
+                </div>
               )}
-            </Section>
-          </>
-        ) : (
-          <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 shadow-sm">
-            <p className="text-sm text-gray-700 dark:text-gray-300">스케줄 정보를 찾을 수 없습니다.</p>
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import React from "react";
+import { openRunLogStream } from '../../../services/runAPI.js';
 
 /**
  * LogStreamPanel
@@ -65,7 +66,7 @@ export default function LogStreamPanel({ runId, onClose }) {
   React.useEffect(() => {
     if (!runId) return;
 
-    const es = new EventSource(`/api/v1/events/runs/${runId}/logs`, { withCredentials: true });
+    const es = openRunLogStream(runId);
 
     const onAny = (e) => {
       try {

@@ -308,6 +308,7 @@ export default function NewTestCaseExcelTab({
                 sleep: "실행 전 대기 시간(초)."
               }} // 필요 없으면 빈 객체
               readOnly={readOnly}
+              uploadScope = "sheet"
             />
           </div>
         </div>

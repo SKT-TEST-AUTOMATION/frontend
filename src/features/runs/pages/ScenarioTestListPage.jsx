@@ -12,6 +12,7 @@ import LogStreamPanel from "../components/LogStreamPanel";
 
 import RunReportPanel from "../components/RunReportPanel";
 import { ReserveScheduleModal } from "../components/ReserveScheduleModal";
+import { generatePath, useNavigate } from 'react-router-dom';
 
 // bit0=MON..bit6=SUN 매핑용
 const DAY_OF_WEEK_ENUMS = [
@@ -80,14 +81,19 @@ const ScenarioTestRow = React.memo(function ScenarioTestRow({
   // StatusBadge from parent scope
   const StatusBadge = React.useContext(StatusBadgeContext);
 
+  const navigate = useNavigate();
+  const goDetail = (id) => {
+    navigate(generatePath("/runs/:scenarioTestId/detail", { scenarioTestId: id }));
+  }
+
   return (
     <div className="group">
       <div className="grid grid-cols-11 gap-4 px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
         <div className="col-span-1 text-gray-900 dark:text-gray-100">{id}</div>
 
         <div className="col-span-3">
-          <div className="flex flex-col gap-1">
-            <span className="text-gray-800 dark:text-gray-200 font-medium truncate" title={testCode}>
+          <div className="flex flex-col gap-1  cursor-pointer" onClick={() => goDetail(id)}>
+            <span className="text-gray-800 dark:text-gray-200 hover:text-blue-600 dark:hover:text-blue-400 font-medium truncate" title={testCode}>
               {testCode}
             </span>
             <span className="text-gray-600 dark:text-gray-400 truncate" title={testName}>

@@ -257,14 +257,14 @@ export default function Sidebar({
         {/* Brand (리디자인) */}
         <div
           className="relative flex cursor-pointer items-center gap-3 px-5 h-16 flex-none border-b border-slate-100 dark:border-slate-800 bg-white/90 dark:bg-slate-900/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-slate-900/60"
-          onClick={goHome}
-          onKeyDown={onBrandKeyDown}
-          role="button"
-          tabIndex={0}
-          aria-label="랜딩 화면으로 이동"
+
+
         >
 
-          <div className="min-w-0">
+          <div className="min-w-0"           onClick={goHome}
+               onKeyDown={onBrandKeyDown}           role="button"
+               tabIndex={0}
+               aria-label="랜딩 화면으로 이동">
             <h1 className="text-base font-extrabold text-slate-900 dark:text-slate-100 tracking-tight leading-none whitespace-nowrap">
               <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500">Q-One</span>
             </h1>
