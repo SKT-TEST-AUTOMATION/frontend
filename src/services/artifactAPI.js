@@ -7,10 +7,7 @@
  * - 실제 요청은 fetch/axios가 아니라 <img src="..."> 등에서 사용
  */
 
-const API_ORIGIN =
-  (import.meta.env.VITE_BACKEND_ORIGIN ?? "") ||
-  // VITE_BACKEND_ORIGIN 이 없고 dev 환경이면 기본값
-  (import.meta.env.DEV ? "http://localhost:18080" : "");
+import { API_ORIGIN } from '../shared/config/apiConfig.js';
 
 /**
  * evidencePath, okImg, failImg 등에서 브라우저가 접근 가능한 URL로 변환
