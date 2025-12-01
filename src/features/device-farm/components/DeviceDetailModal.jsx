@@ -148,7 +148,7 @@ export default function DeviceDetailModal({ open, onClose, device, onSaved }) {
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
-                Device Name
+                디바이스 이름
               </label>
               <input
                 type="text"
@@ -158,7 +158,7 @@ export default function DeviceDetailModal({ open, onClose, device, onSaved }) {
                 placeholder="Friendly name..."
               />
               <p className="mt-1 text-xs text-slate-400">
-                A human-readable name for identifying this device in tests.
+                디바이스를 구분하기 위한 이름을 설정하세요.
               </p>
             </div>
 
@@ -175,8 +175,7 @@ export default function DeviceDetailModal({ open, onClose, device, onSaved }) {
                 disabled={true}
               />
               <p className="mt-1 text-xs text-slate-400">
-                The port used for internal device communication (e.g.
-                uiautomator2).
+                이 시스템 포트를 사용하여 세션에 연결됩니다.
               </p>
             </div>
 
@@ -192,14 +191,14 @@ export default function DeviceDetailModal({ open, onClose, device, onSaved }) {
                 onClick={onClose}
                 className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
-                Cancel
+                취소
               </button>
               <button
                 type="submit"
                 disabled={saving}
                 className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
               >
-                {saving ? "Saving..." : "Save Changes"}
+                {saving ? "저장 중..." : "저장"}
               </button>
             </div>
           </form>

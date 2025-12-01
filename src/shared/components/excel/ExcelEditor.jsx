@@ -33,6 +33,7 @@ const ExcelEditor = forwardRef(function ExcelEditor(
     columnDescriptions = {},
     onSave,
     readOnly = true,
+    uploadScope = "workbook",
   },
   ref
 ) {
@@ -495,7 +496,7 @@ const ExcelEditor = forwardRef(function ExcelEditor(
           />*/}
 
         </div>
-        {!isReadOnly &&
+        {!isReadOnly && uploadScope === "sheet" && (
           <button
             onClick={handleSave}
             disabled={isReadOnly}
@@ -508,12 +509,13 @@ const ExcelEditor = forwardRef(function ExcelEditor(
           >
             <Save size={16} /> 시트 업로드
           </button>
+          )
         }
       </div>
 
       {/* --- Overlay --- */}
       {isDragging && !isReadOnly && (
-        <div className="absolute inset-0 bg-blue-500/10 backdrop-blur-sm z-50 flex flex-col items-center justify-center border-4 border-blue-500 border-dashed rounded-lg m-2 pointer-events-none">
+        <div className="absolute inset-0 bg-blue-500/10 backdrop-blur-sm z-5 flex flex-col items-center justify-center border-4 border-blue-500 border-dashed rounded-lg m-2 pointer-events-none">
           <Upload size={48} className="text-blue-600 mb-2" />
           <p className="text-xl font-bold text-blue-700">
             Drop Excel File Here
@@ -525,9 +527,9 @@ const ExcelEditor = forwardRef(function ExcelEditor(
       <div className="flex-1 overflow-auto relative bg-gray-100">
         <table className="border-collapse table-fixed bg-white min-w-max">
           {/* HEADER ROW (Data Row 0) */}
-          <thead className="sticky top-0 z-[40] shadow-sm">
+          <thead className="sticky top-0 z-[4] shadow-sm">
           <tr>
-            <th className="w-12 h-10 sticky left-0 z-[50] bg-gray-100 border-r border-b border-gray-300 text-[10px] text-gray-400 font-normal p-1 text-center">
+            <th className="w-12 h-10 sticky left-0 z-[5] bg-gray-100 border-r border-b border-gray-300 text-[10px] text-gray-400 font-normal p-1 text-center">
               Header
             </th>
 
@@ -587,7 +589,7 @@ const ExcelEditor = forwardRef(function ExcelEditor(
               <tr key={`row-${rowIndex}`}>
                 <td
                   className={cn(
-                    "sticky left-0 z-[30] w-12 border-r border-b border-gray-300 text-center text-xs text-gray-500 select-none font-semibold cursor-[context-menu] hover:bg-gray-200 transition-colors bg-gray-50",
+                    "sticky left-0 z-[3] w-12 border-r border-b border-gray-300 text-center text-xs text-gray-500 select-none font-semibold cursor-[context-menu] hover:bg-gray-200 transition-colors bg-gray-50",
                     selectedCell?.row === rowIndex
                       ? "bg-blue-100 text-blue-700"
                       : ""
@@ -607,7 +609,7 @@ const ExcelEditor = forwardRef(function ExcelEditor(
                       className={cn(
                         "border-r border-b border-gray-200 p-0 relative min-w-[8rem]",
                         isSelected
-                          ? "z-[20] outline outline-2 outline-blue-500"
+                          ? "z-[2] outline outline-2 outline-blue-500"
                           : ""
                       )}
                       onClick={() =>
@@ -681,7 +683,7 @@ const ExcelEditor = forwardRef(function ExcelEditor(
                 className={cn(
                   "flex items-center gap-2 px-4 py-1.5 text-sm transition-all select-none min-w-[100px] max-w-[200px] rounded-t-lg relative top-[1px] border border-b-0 cursor-pointer",
                   isActive
-                    ? "bg-white text-blue-700 font-bold border-gray-300 border-t-2 border-t-blue-600 shadow-sm z-10"
+                    ? "bg-white text-blue-700 font-bold border-gray-300 border-t-2 border-t-blue-600 shadow-sm z-1"
                     : "bg-gray-100 text-gray-500 border-gray-300 hover:bg-gray-50 hover:text-gray-700",
                   isReadOnly && "cursor-default"
                 )}
@@ -737,7 +739,7 @@ const ExcelEditor = forwardRef(function ExcelEditor(
       {/* --- Context Menu --- */}
       {contextMenu && (
         <div
-          className="fixed z-[60] bg-white border border-gray-200 rounded-md shadow-lg w-64 overflow-hidden"
+          className="fixed z-[6] bg-white border border-gray-200 rounded-md shadow-lg w-64 overflow-hidden"
           style={{
             top: contextMenu.y,
             left: contextMenu.x,

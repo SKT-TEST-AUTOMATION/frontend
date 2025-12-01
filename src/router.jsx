@@ -17,6 +17,7 @@ import ScenarioListPageDummy from "./features/scenario/pages/ScenarioListPageDum
 import DeviceFarmPageDummy from "./features/device-farm/DeviceFarmPageDummy";
 import TestScheduleListPage from "./features/runs/pages/TestScheduleListPage";
 import TestScheduleDetailPage from './features/runs/pages/TestScheduleDetailPage.jsx';
+import ScenarioTestDetailPage from './features/runs/pages/ScenarioTestDetailPage.jsx';
 
 export const routes = [
   { path: "/", element: <LandingPage /> },
@@ -46,6 +47,7 @@ export const routes = [
         ]},
       { path: "runs", children: [
           { index: true, element: <ScenarioTestListPage /> },
+          { path : ":scenarioTestId/detail", element: <ScenarioTestDetailPage /> },
           { path : "batches", element: <TestScheduleListPage /> },
           { path : "batches/:scheduleId", element: <TestScheduleDetailPage /> }
         ]},

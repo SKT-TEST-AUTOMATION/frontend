@@ -49,13 +49,19 @@ export async function getScenarioTests(params = {}, signal) {
   return res;
 }
 
+// 시나리오 단건 조회
+export async function getScenarioTest(id, signal) {
+  const res = await api.get(`scenarios/tests/${id}`, { signal });
+  return res?.data?.data ?? res?.data;
+}
+
 // 테스트 결과 
 export async function getScenarioTestResults(params = {}, signal) {
-  const { page = 0, size = 10, sort = "id,desc"} = params;
-  console.log(params);
+  const { page = 0, size = 10, sort = "id,desc", ...filters} = params;
+
   const res = await api.get("scenarios/tests/results", {
     signal,
-    params: { page, size, sort },
+    params: { page, size, sort, ...filters },
   });
   return res?.data?.data ?? res?.data;
 }

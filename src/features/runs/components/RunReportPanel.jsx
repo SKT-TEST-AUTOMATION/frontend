@@ -1,3 +1,4 @@
+// src/features/runs/components/RunReportPanel.jsx
 import React, {
   useCallback,
   useEffect,
@@ -25,41 +26,8 @@ import {
   WifiOff
 } from "lucide-react";
 import { formatMs } from "../../../shared/utils/timeUtils.js";
-
-
-// --- Evidence URL helpers (공통) ---
-const API_ORIGIN =
-  (import.meta.env.VITE_BACKEND_ORIGIN ?? "") ||
-  (import.meta.env.DEV ? "http://localhost:18080" : "");
-
-function toEvidenceUrl(p) {
-  if (!p) return null;
-  let v = String(p).trim();
-
-  // 이미 절대 URL / data URL 이면 그대로 사용
-  if (/^(https?:)?\/\//i.test(v) || v.startsWith("data:")) return v;
-
-  // 윈도우 경로 보정
-  v = v.replace(/\\/g, "/");
-
-  // 이미 /artifacts/ 로 시작하는 경우
-  if (v.startsWith("/artifacts/")) return `${API_ORIGIN}${v}`;
-
-  // 그냥 /로 시작하면 (프록시로 넘기는 구조면) 그대로 사용
-  if (v.startsWith("/")) return v;
-
-  // 중간에 artifacts/ 가 포함된 경우
-  const idx = v.toLowerCase().indexOf("artifacts/");
-  if (idx >= 0) {
-    const sub = v.slice(idx + "artifacts/".length);
-    return `${API_ORIGIN}/artifacts/${encodeURI(sub)}`;
-  }
-
-  // 그 외: 상대 경로(screenshots/...) → /artifacts/screenshots/... 으로 매핑
-  const cleaned = v.replace(/^(\.\/|\/)+/, "");
-  return `${API_ORIGIN}/artifacts/${encodeURI(cleaned)}`;
-}
-
+import { getRunReport, openRunLogStream } from "../../../services/runAPI.js";
+import { toEvidenceUrl } from "../../../services/artifactAPI.js";
 
 // --- Logic Helpers ---
 
@@ -225,33 +193,6 @@ const EvidenceModal = ({ open, onClose, step }) => {
         {/* 바디 */}
         <div className="flex-1 overflow-auto p-6 bg-slate-100 dark:bg-slate-950">
           <div className="grid grid-cols-1 lg:grid-cols-1 gap-6">
-            {/* Success Image */}
-            {/*<div className="flex flex-col gap-2">*/}
-            {/*  <div className="flex items-center justify-between">*/}
-            {/*    <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">*/}
-            {/*      Success State*/}
-            {/*    </span>*/}
-            {/*    {!okUrl && (*/}
-            {/*      <span className="text-xs text-slate-400 italic">*/}
-            {/*        Not available*/}
-            {/*      </span>*/}
-            {/*    )}*/}
-            {/*  </div>*/}
-            {/*  <div className="aspect-video bg-slate-200 dark:bg-slate-900 rounded-lg border border-slate-300 dark:border-slate-800 overflow-hidden flex items-center justify-center relative group">*/}
-            {/*    {okUrl ? (*/}
-            {/*      <img*/}
-            {/*        src={okUrl}*/}
-            {/*        alt="Success"*/}
-            {/*        className="w-full h-full object-contain"*/}
-            {/*      />*/}
-            {/*    ) : (*/}
-            {/*      <div className="flex flex-col items-center gap-2 text-slate-400 dark:text-slate-600">*/}
-            {/*        <ImageIcon className="w-12 h-12 opacity-20" />*/}
-            {/*      </div>*/}
-            {/*    )}*/}
-            {/*  </div>*/}
-            {/*</div>*/}
-
             {/* Failure Image */}
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between">
@@ -309,8 +250,6 @@ const EvidenceModal = ({ open, onClose, step }) => {
     </div>
   );
 };
-
-
 
 // --- Main Component ---
 
@@ -411,7 +350,7 @@ export default function RunReportPanel({
       out.ms = stepObj?.ms ?? e?.elapsedMs;
     if (e?.okImg) out.okImg = e.okImg;
 
-    // ARTIFACT 이벤트는 기존 로직 그대로 두되, path → evidence 로 보조 용도로 사용
+    // ARTIFACT 이벤트
     if (type === "ARTIFACT" && (e?.path || e?.url) && no != null) {
       const imgPath = e.path || e.url;
       const mime = e?.mime || e?.contentType || e?.kind || "";
@@ -524,7 +463,7 @@ export default function RunReportPanel({
     }
   }, [initialReport, live, runId]);
 
-  // 2. Static Log seeding
+  // 2. Static Log seeding (resultLog 에서 바로 파싱)
   useEffect(() => {
     if (!runId || live) return;
     const hasSeed =
@@ -556,68 +495,58 @@ export default function RunReportPanel({
     }));
   }, [runId, live, resultLog, ingestEvent, deriveStatus]);
 
-  // 3. Static Fetch
+  // 3. Static Fetch (API에서 리포트 조회)
   useEffect(() => {
     if (live || initialReport || !runId) return;
+
     const noSeed =
       !Array.isArray(resultLog) &&
       !(typeof resultLog === "string" && resultLog.length > 0) &&
       !(resultLog && typeof resultLog === "object");
     if (!noSeed) return;
 
-    let aborted = false;
-    (async () => {
-      const tryUrls = [
-        `/api/v1/runs/${runId}/report`,
-        `/api/v1/run-results/${runId}`
-      ];
-      for (const url of tryUrls) {
-        try {
-          const res = await fetch(url, { credentials: "include" });
-          if (!res.ok) continue;
-          const json = await res.json();
-          if (aborted) return;
+    const ac = new AbortController();
 
-          const m = json?.meta || {};
-          const ss = (Array.isArray(json?.steps) ? json.steps : []) || [];
-          const rl = Array.isArray(json?.rawLines) ? json.rawLines : [];
-          const mm = new Map();
-          ss.forEach((s) => {
-            if (s?.no == null) return;
-            const sheet = s.sheet ?? null;
-            const key = buildStepKey({ sheet, no: s.no });
-            const merged = smartMerge({}, { ...s, sheet, id: key });
-            mm.set(key, merged);
-          });
-          stepsMapRef.current = mm;
-          const arr = Array.from(mm.values()).sort(compareStep);
-          setMeta({
-            ...m,
-            runId: m.runId ?? runId,
-            status: m.status || deriveStatus(arr, false)
-          });
-          setSteps(arr);
-          setRawLines(rl);
-          setConnected(false);
-          return;
-        } catch {
-          // ignore and try next URL
-        }
+    (async () => {
+      try {
+        const json = await getRunReport(runId, ac.signal);
+
+        const m = json?.meta || {};
+        const ss = (Array.isArray(json?.steps) ? json.steps : []) || [];
+        const rl = Array.isArray(json?.rawLines) ? json.rawLines : [];
+
+        const mm = new Map();
+        ss.forEach((s) => {
+          if (s?.no == null) return;
+          const sheet = s.sheet ?? null;
+          const key = buildStepKey({ sheet, no: s.no });
+          const merged = smartMerge({}, { ...s, sheet, id: key });
+          mm.set(key, merged);
+        });
+        stepsMapRef.current = mm;
+        const arr = Array.from(mm.values()).sort(compareStep);
+
+        setMeta({
+          ...m,
+          runId: m.runId ?? runId,
+          status: m.status || deriveStatus(arr, false)
+        });
+        setSteps(arr);
+        setRawLines(rl);
+        setConnected(false);
+      } catch (e) {
+        setError("Failed to load report data.");
       }
-      setError("Failed to load report data.");
     })();
 
-    return () => {
-      aborted = true;
-    };
+    return () => ac.abort();
   }, [live, initialReport, runId, resultLog, deriveStatus]);
 
   // 4. SSE (Live)
   useEffect(() => {
     if (!live || !runId) return;
-    const es = new EventSource(`/api/v1/events/runs/${runId}/logs`, {
-      withCredentials: true
-    });
+
+    const es = openRunLogStream(runId);
 
     const onAny = (e) => {
       try {
@@ -1014,11 +943,11 @@ export default function RunReportPanel({
                               <div className="flex flex-wrap items-center gap-2 text-xs">
                                 <ResultPill result={s.result} />
                                 <span className="ml-3 text-[11px] text-slate-500 dark:text-slate-400 font-mono">
-                                  {s.name}
-                                </span>
+                                    {s.name}
+                                  </span>
                                 <span className="ml-3 text-[11px] text-slate-500 dark:text-slate-400 font-mono">
-                                  {formatMs(s.ms)} 소요
-                                </span>
+                                    {formatMs(s.ms)} 소요
+                                  </span>
                               </div>
 
                               {/* Evidence 버튼 */}
@@ -1046,9 +975,9 @@ export default function RunReportPanel({
                             {/* Selector */}
                             <div>
                               <div className="flex items-center justify-between gap-2 mb-1">
-                                <span className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">
-                                  Selector
-                                </span>
+                                  <span className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">
+                                    Selector
+                                  </span>
                               </div>
                               <code className="block bg-white dark:bg-slate-950 px-3 py-2 rounded border border-slate-200 dark:border-slate-700 text-xs font-mono text-slate-800 dark:text-slate-200 overflow-x-auto">
                                 {fmtSelector(s.selector) || "N/A"}
@@ -1057,9 +986,9 @@ export default function RunReportPanel({
 
                             {/* Visible If */}
                             <div>
-                              <span className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">
-                                Visible If
-                              </span>
+                                <span className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">
+                                  Visible If
+                                </span>
                               <code className="block mt-1 bg-white dark:bg-slate-950 px-3 py-2 rounded border border-slate-200 dark:border-slate-700 text-xs font-mono text-slate-600 dark:text-slate-400 whitespace-pre-wrap break-words">
                                 {fmtVisibleIf(s.visibleIf) || "N/A"}
                               </code>
@@ -1068,12 +997,12 @@ export default function RunReportPanel({
                             {/* Error */}
                             {s.reason && (
                               <div>
-              <span className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">
-                Error
-              </span>
+                                  <span className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">
+                                    Error
+                                  </span>
                                 <pre className="mt-1 bg-white dark:bg-slate-950 px-3 py-2 rounded border border-rose-200/80 dark:border-rose-700/80 text-xs font-mono text-rose-600 dark:text-rose-400 whitespace-pre-wrap break-words">
-                {s.reason}
-              </pre>
+                                    {s.reason}
+                                  </pre>
                               </div>
                             )}
                           </div>
