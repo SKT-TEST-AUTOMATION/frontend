@@ -301,10 +301,31 @@ export default function RunReportPanel({
   }, []);
 
   const deriveStatus = useCallback((arr, runningHint) => {
+    // 1) 스텝이 하나도 없을 때
+    if (!arr || arr.length === 0) {
+      // 라이브로 아직 돌고 있는 경우엔 RUNNING, 아니면 N/A
+      return runningHint ? "RUNNING" : "N/A";
+    }
+
     const hasFail = arr.some((s) => s.result === "fail");
     if (hasFail) return "FAIL";
+
     const hasUnknown = arr.some((s) => !s.result || s.result === "na");
-    if (runningHint || hasUnknown) return "RUNNING";
+    const hasOk = arr.some((s) => s.result === "ok");
+
+    // 2) 실행 중인 경우: 아직 안 끝난 스텝(na)이 있으면 RUNNING
+    if (runningHint && hasUnknown) {
+      return "RUNNING";
+    }
+
+    // 3) 실행이 끝난 경우
+    //   - fail은 위에서 걸러졌으니,
+    //   - ok가 하나도 없고, 전부 na이거나 미지정이면 N/A
+    if (!hasOk) {
+      return "N/A";
+    }
+
+    // 4) 그 외: 전부 ok 라고 가정 → PASS
     return "PASS";
   }, []);
 
