@@ -27,7 +27,7 @@ export default function ScenarioTestFormModal({ scenarioId, onSuccess, onError }
     appPlatformType: "MOBILE_APP",
     testAppId: "1", // t 멤버십
     deviceOsType: "ANDROID",   
-    userId: "",
+    userId: "1",
   });
 
   const onChange = (e) => {
