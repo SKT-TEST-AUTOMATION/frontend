@@ -4,16 +4,18 @@ import { REQUEST_CANCELED_CODE } from "../../../constants/errors";
 import PageHeader from "../../../shared/components/PageHeader";
 import PaginationBar from "../../../shared/components/PaginationBar";
 import { useToast } from "../../../shared/hooks/useToast";
-import { deleteSchedule, getTestSchedules, updateScheduleStatus } from '../../../services/scheduleAPI';
-import { useNavigate } from 'react-router-dom';
-import DateWithTodayClear from '../../../shared/components/DateWithTodayClear.jsx';
+import {
+  deleteSchedule,
+  getTestSchedules,
+  updateScheduleStatus,
+} from "../../../services/scheduleAPI";
+import { useNavigate } from "react-router-dom";
 
 /**
  * 예상 응답 스키마 (TestScheduleListDto.Response)
  * { id, name, type, status, startDate, endDate, executeTime, deviceUdid, repeatTimes, repeatCount,
  *   scenarioTest: { id, code, testName, appPlatformType, testAppId, running } }
  */
-
 
 // 오늘 / 지우기 토글이 있는 date input
 function TodayToggleDateInput({ id, value, onChange, className = "" }) {
@@ -72,12 +74,30 @@ function TodayToggleDateInput({ id, value, onChange, className = "" }) {
 // 유틸
 const TYPE_LABEL = { ONCE: "한 번", DAILY: "매일", WEEKLY: "매주" };
 const STATUS_UI = {
-  ACTIVE:   { text: "활성화",  value: "ACTIVE", chip: "bg-green-100 text-green-800",  canToggle: true,  checked: true },
-  INACTIVE: { text: "비활성화", value: "INACTIVE", chip: "bg-rose-100 text-rose-800",   canToggle: true,  checked: false },
-  EXPIRED:  { text: "기간 만료", value: "EXPIRED", chip: "bg-gray-100 text-gray-800", canToggle: false, checked: false },
+  ACTIVE: {
+    text: "활성화",
+    value: "ACTIVE",
+    chip: "bg-green-100 text-green-800",
+    canToggle: true,
+    checked: true,
+  },
+  INACTIVE: {
+    text: "비활성화",
+    value: "INACTIVE",
+    chip: "bg-rose-100 text-rose-800",
+    canToggle: true,
+    checked: false,
+  },
+  EXPIRED: {
+    text: "기간 만료",
+    value: "EXPIRED",
+    chip: "bg-gray-100 text-gray-800",
+    canToggle: false,
+    checked: false,
+  },
 };
 const formatDateRange = (s, e) =>
-  (!s && !e) ? "-" : (s && !e) ? s : (!s && e) ? e : `${s} ~ ${e}`;
+  !s && !e ? "-" : s && !e ? s : !s && e ? e : `${s} ~ ${e}`;
 const formatTimeHHmm = (t) => t || "--:--";
 
 // 공통 컬럼 템플릿(총 10열)
@@ -85,7 +105,7 @@ const GRID_COLS =
   "grid grid-cols-[28px_96px_minmax(160px,1fr)_minmax(160px,1fr)_84px_100px_minmax(260px,1fr)_96px_96px_120px]";
 const TABLE_MIN_WIDTH = "min-w-[1360px]";
 const CELL_BASE = "flex items-center h-12 leading-[1.15]";
-const CELL_NUM  = `${CELL_BASE} tabular-nums`;
+const CELL_NUM = `${CELL_BASE} tabular-nums`;
 
 export default function TestScheduleListPage() {
   const { showToast } = useToast();
@@ -108,7 +128,7 @@ export default function TestScheduleListPage() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const allChecked = useMemo(
     () => rows.length > 0 && rows.every((r) => selectedIds.has(r.id)),
-    [rows, selectedIds]
+    [rows, selectedIds],
   );
   const toggleAll = () =>
     setSelectedIds((prev) => {
@@ -128,17 +148,19 @@ export default function TestScheduleListPage() {
       try {
         const res = await getTestSchedules(
           { page: page - 1, size, sort: "id,desc", q, status, targetDate },
-          signal
+          signal,
         );
         const data = normalizePage(res);
         setRows(data.content ?? []);
         setMeta({
           totalPages: data.totalPages ?? 1,
-          totalElements: data.totalElements ?? (data.content?.length ?? 0),
+          totalElements:
+            data.totalElements ?? (data.content?.length ?? 0),
         });
         setSelectedIds(new Set());
       } catch (e) {
-        if (e?.code !== REQUEST_CANCELED_CODE) setError(toErrorMessage(e));
+        if (e?.code !== REQUEST_CANCELED_CODE)
+          setError(toErrorMessage(e));
       } finally {
         setLoading(false);
       }
@@ -154,9 +176,13 @@ export default function TestScheduleListPage() {
 
   // 일괄/토글
   const bulkDisable = async () => {
-    if (selectedIds.size === 0) return showToast("info", "선택된 스케줄이 없습니다.");
+    if (selectedIds.size === 0)
+      return showToast("info", "선택된 스케줄이 없습니다.");
     try {
-      showToast("success", "일괄 비활성화 요청이 처리되었습니다. (API 연결 필요)");
+      showToast(
+        "success",
+        "일괄 비활성화 요청이 처리되었습니다. (API 연결 필요)",
+      );
       fetchList(new AbortController().signal);
     } catch {
       showToast("error", "일괄 비활성화 실패");
@@ -164,10 +190,14 @@ export default function TestScheduleListPage() {
   };
 
   const bulkDelete = async () => {
-    if (selectedIds.size === 0) return showToast("info", "선택된 스케줄이 없습니다.");
+    if (selectedIds.size === 0)
+      return showToast("info", "선택된 스케줄이 없습니다.");
     if (!confirm("선택한 스케줄을 삭제하시겠습니까?")) return;
     try {
-      showToast("success", "일괄 삭제 요청이 처리되었습니다. (API 연결 필요)");
+      showToast(
+        "success",
+        "일괄 삭제 요청이 처리되었습니다. (API 연결 필요)",
+      );
       fetchList(new AbortController().signal);
     } catch {
       showToast("error", "일괄 삭제 실패");
@@ -178,10 +208,15 @@ export default function TestScheduleListPage() {
     const info = STATUS_UI[row.status] ?? STATUS_UI.INACTIVE;
     if (!info.canToggle) return;
     const nextEnable = !info.checked;
-    const nextStatus = row.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+    const nextStatus = row.status === "ACTIVE" ? "INACTIVE" : "ACTIVE";
     try {
       await updateScheduleStatus(row.id, nextStatus);
-      showToast("success", `스케줄이 ${nextEnable ? "활성화" : "비활성화"} 되었습니다.`);
+      showToast(
+        "success",
+        `스케줄이 ${
+          nextEnable ? "활성화" : "비활성화"
+        } 되었습니다.`,
+      );
       fetchList(new AbortController().signal);
     } catch {
       showToast("error", "상태 변경 실패");
@@ -246,7 +281,7 @@ export default function TestScheduleListPage() {
             <input
               id="schedule-search"
               value={q}
-              // onChange={(e) => setQ(e.target.value)}
+              onChange={(e) => setQ(e.target.value)}
               placeholder="테스트 코드, 테스트 이름, 스케줄 이름으로 검색"
               className="w-full h-10 pl-10 pr-3.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
@@ -291,12 +326,7 @@ export default function TestScheduleListPage() {
           <div className="sm:w-auto sm:flex sm:justify-end">
             <button
               type="button"
-              onClick={() => {
-                setQ("");
-                setStatus("");
-                setTargetDate("");
-                setPage(1);
-              }}
+              onClick={handleResetFilters}
               className="inline-flex items-center gap-1 h-9 px-3 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-xs"
             >
               <span className="material-symbols-outlined text-[16px]">
@@ -349,31 +379,57 @@ export default function TestScheduleListPage() {
         <div className="overflow-x-auto">
           <div className={`${TABLE_MIN_WIDTH}`}>
             {/* 헤더 */}
-            <div className={`${GRID_COLS} gap-4 pl-2 pr-5 py-2.5 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-700`}>
+            <div
+              className={`${GRID_COLS} gap-4 pl-2 pr-5 py-2.5 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-700`}
+            >
               <div className={`${CELL_BASE} justify-center`}>
                 <input
                   type="checkbox"
-                  checked={filteredRows.length > 0 && filteredRows.every(r => selectedIds.has(r.id))}
+                  checked={
+                    filteredRows.length > 0 &&
+                    filteredRows.every((r) => selectedIds.has(r.id))
+                  }
                   onChange={toggleAll}
                   className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
                 />
               </div>
-              <div className={`${CELL_BASE} text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase`}>테스트 코드</div>
-              <div className={`${CELL_BASE} text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase`}>테스트 이름</div>
-              <div className={`${CELL_BASE} text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase`}>스케줄 이름</div>
-              <div className={`${CELL_BASE} text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase`}>반복 주기</div>
-              <div className={`${CELL_BASE} text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase`}>실행 시간</div>
-              <div className={`${CELL_BASE} text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase`}>실행 기간</div>
-              <div className={`${CELL_BASE} text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase`}>상태</div>
-              <div className={`${CELL_BASE} text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase`}>ON/OFF</div>
-              <div className={`${CELL_BASE} text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase`}>액션</div>
+              <div className={`${CELL_BASE} text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase`}>
+                테스트 코드
+              </div>
+              <div className={`${CELL_BASE} text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase`}>
+                테스트 이름
+              </div>
+              <div className={`${CELL_BASE} text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase`}>
+                스케줄 이름
+              </div>
+              <div className={`${CELL_BASE} text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase`}>
+                반복 주기
+              </div>
+              <div className={`${CELL_BASE} text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase`}>
+                실행 시간
+              </div>
+              <div className={`${CELL_BASE} text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase`}>
+                실행 기간
+              </div>
+              <div className={`${CELL_BASE} text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase`}>
+                상태
+              </div>
+              <div className={`${CELL_BASE} text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase`}>
+                ON/OFF
+              </div>
+              <div className={`${CELL_BASE} text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase`}>
+                액션
+              </div>
             </div>
 
             {/* 로딩 */}
             {loading && (
               <div className="divide-y divide-gray-200 dark:divide-gray-700">
                 {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className={`${GRID_COLS} gap-4 pl-2 pr-5 py-2.5`}>
+                  <div
+                    key={i}
+                    className={`${GRID_COLS} gap-4 pl-2 pr-5 py-2.5`}
+                  >
                     {Array.from({ length: 10 }).map((__, j) => (
                       <div key={j} className={`${CELL_BASE}`}>
                         <div className="w-full h-3.5 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
@@ -386,14 +442,18 @@ export default function TestScheduleListPage() {
 
             {/* 에러 */}
             {!loading && error && (
-              <div className="px-5 py-6 text-sm text-rose-600 dark:text-rose-300">{error}</div>
+              <div className="px-5 py-6 text-sm text-rose-600 dark:text-rose-300">
+                {error}
+              </div>
             )}
 
             {/* 비어있음 */}
             {!loading && !error && filteredRows.length === 0 && (
               <div className="flex flex-col items-center justify-center py-14 text-sm">
                 <div className="w-14 h-14 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-3.5">
-                  <span className="material-symbols-outlined text-gray-400 text-xl">list_alt</span>
+                  <span className="material-symbols-outlined text-gray-400 text-xl">
+                    list_alt
+                  </span>
                 </div>
                 <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1.5">
                   데이터가 없습니다
@@ -411,10 +471,15 @@ export default function TestScheduleListPage() {
                   const scenarioCode = r?.scenarioTestCode ?? "-";
                   const testName = r?.scenarioTestName ?? "-";
                   const scheduleName = r?.name ?? "-";
-                  const typeLabel = TYPE_LABEL[r?.type] ?? r?.type ?? "-";
+                  const typeLabel =
+                    TYPE_LABEL[r?.type] ?? r?.type ?? "-";
                   const timeLabel = formatTimeHHmm(r?.executeTime);
-                  const rangeLabel = formatDateRange(r?.startDate, r?.endDate);
-                  const statusUi = STATUS_UI[r?.status] ?? STATUS_UI.INACTIVE;
+                  const rangeLabel = formatDateRange(
+                    r?.startDate,
+                    r?.endDate,
+                  );
+                  const statusUi =
+                    STATUS_UI[r?.status] ?? STATUS_UI.INACTIVE;
 
                   return (
                     <div
@@ -438,40 +503,57 @@ export default function TestScheduleListPage() {
                         />
                       </div>
 
-                      {/* 테스트 코드 */}
-                      <div className={`${CELL_BASE} font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap`}>
-                        {scenarioCode}
+                      {/* 테스트 코드 (말줄임표 + title) */}
+                      <div className={`${CELL_BASE} min-w-0`}>
+                        <div
+                          className="font-medium text-gray-900 dark:text-gray-100 truncate"
+                          title={scenarioCode}
+                        >
+                          {scenarioCode}
+                        </div>
                       </div>
 
-                      {/* 테스트 이름 */}
+                      {/* 테스트 이름 (말줄임표 + title) */}
                       <div className={`${CELL_BASE} min-w-0`}>
-                        <div className="text-gray-800 dark:text-gray-200 truncate" title={testName}>
+                        <div
+                          className="text-gray-800 dark:text-gray-200 truncate"
+                          title={testName}
+                        >
                           {testName}
                         </div>
                       </div>
 
-                      {/* 스케줄 이름 */}
+                      {/* 스케줄 이름 (말줄임표 + title) */}
                       <div
                         className={`${CELL_BASE} min-w-0 cursor-pointer`}
                         onClick={() => {
                           onScheduleClick(r.id);
                         }}
                       >
-                        <div className="text-gray-700 dark:text-gray-300 truncate" title={scheduleName}>
+                        <div
+                          className="text-gray-700 dark:text-gray-300 truncate"
+                          title={scheduleName}
+                        >
                           {scheduleName}
                         </div>
                       </div>
 
                       {/* 주기/시간 */}
-                      <div className={`${CELL_BASE} text-gray-700 dark:text-gray-300`}>{typeLabel}</div>
-                      <div className={`${CELL_NUM} text-gray-700 dark:text-gray-300`}>{timeLabel}</div>
+                      <div className={`${CELL_BASE} text-gray-700 dark:text-gray-300`}>
+                        {typeLabel}
+                      </div>
+                      <div className={`${CELL_NUM} text-gray-700 dark:text-gray-300`}>
+                        {timeLabel}
+                      </div>
 
-                      {/* 실행 기간 */}
-                      <div
-                        className={`${CELL_NUM} whitespace-nowrap text-gray-700 dark:text-gray-300`}
-                        title={rangeLabel}
-                      >
-                        {rangeLabel}
+                      {/* 실행 기간 (옵션: 말줄임표 + title) */}
+                      <div className={`${CELL_NUM} min-w-0`}>
+                        <div
+                          className="whitespace-nowrap text-gray-700 dark:text-gray-300 truncate"
+                          title={rangeLabel}
+                        >
+                          {rangeLabel}
+                        </div>
                       </div>
 
                       {/* 상태 */}
@@ -487,7 +569,9 @@ export default function TestScheduleListPage() {
                       <div className={`${CELL_BASE} shrink-0`}>
                         <label
                           className={`relative inline-flex items-center ${
-                            statusUi.canToggle ? "cursor-pointer" : "cursor-not-allowed opacity-50"
+                            statusUi.canToggle
+                              ? "cursor-pointer"
+                              : "cursor-not-allowed opacity-50"
                           }`}
                         >
                           <input
@@ -506,17 +590,23 @@ export default function TestScheduleListPage() {
                         <div className="flex items-center gap-2">
                           <button
                             className="text-blue-600 hover:text-blue-700"
-                            onClick={() => alert("편집은 추후 구현 예정입니다.")}
+                            onClick={() =>
+                              alert("편집은 추후 구현 예정입니다.")
+                            }
                             title="편집"
                           >
-                            <span className="material-symbols-outlined text-base">edit</span>
+                            <span className="material-symbols-outlined text-base">
+                              edit
+                            </span>
                           </button>
                           <button
                             className="text-rose-500 hover:text-rose-700"
                             onClick={() => onDelete(r)}
                             title="삭제"
                           >
-                            <span className="material-symbols-outlined text-base">delete</span>
+                            <span className="material-symbols-outlined text-base">
+                              delete
+                            </span>
                           </button>
                         </div>
                       </div>
