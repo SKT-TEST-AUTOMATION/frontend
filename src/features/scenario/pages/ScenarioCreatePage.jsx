@@ -234,14 +234,6 @@ export default function ScenarioCreatePage() {
         footerActions={footerActions}
         isEdit={isEdit}
       />
-
-      {isEdit && (
-        <ScenarioExcelUploadPanel
-          scenarioId={Number(routeScenarioId)}
-          excelFileName={scenarioExcelFileName}
-          onChange={setScenarioExcelFileName}
-        />
-      )}
     </form>
   );
 }

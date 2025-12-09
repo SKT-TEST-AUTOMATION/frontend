@@ -15,6 +15,8 @@ export default function TestCaseResultTable({
                                               udid,
                                               onOpenEvidence,
                                               onClickCreateJira,
+                                              // 🔽 추가: 실패 코드 팝업을 띄우기 위한 콜백
+                                              onClickFailCode,
                                             }) {
   const { loading, error, rows = [] } = block || {};
 
@@ -38,9 +40,10 @@ export default function TestCaseResultTable({
           {/* header */}
           <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-900 text-[11px] font-semibold text-gray-600 dark:text-gray-300">
             <div className="col-span-2">케이스 ID</div>
-            <div className="col-span-5">케이스명</div>
+            <div className="col-span-4">케이스명</div>
             <div className="col-span-2">실행시간(ms)</div>
             <div className="col-span-1 text-center">결과</div>
+            <div className="col-span-1 text-center">실패 코드</div>
             <div className="col-span-1 text-center">증거</div>
             <div className="col-span-1 text-center">이슈</div>
           </div>
@@ -62,6 +65,22 @@ export default function TestCaseResultTable({
                   tc?.issueId ?? tc?.issue ?? tc?.jiraIssueKey ?? null;
                 const evidenceStr =
                   tc?.errorEvidence ?? tc?.error_evidence ?? null;
+                const failCodeStr = tc?.testFailCode?.code ?? null;
+
+                const handleFailCodeClick = () => {
+                  if (!onClickFailCode) return;
+                  onClickFailCode({
+                    runId,
+                    testCaseRow: tc,
+                    caseId,
+                    caseCode,
+                    caseName,
+                    testName,
+                    deviceName,
+                    udid,
+                    failCode: failCodeStr,
+                  });
+                };
 
                 return (
                   <div
@@ -74,18 +93,58 @@ export default function TestCaseResultTable({
                     >
                       {caseCode}
                     </div>
+
                     <div
-                      className="col-span-5 text-gray-700 dark:text-gray-300 truncate"
+                      className="col-span-4 text-gray-700 dark:text-gray-300 truncate"
                       title={caseName}
                     >
                       {caseName}
                     </div>
+
                     <div className="col-span-2 text-gray-700 dark:text-gray-300">
                       {formatMs(durMs)}
                     </div>
+
+                    {/* 결과 */}
                     <div className="col-span-1 flex items-center justify-center">
                       <ResultBadge result={result} />
                     </div>
+
+                    {/* 실패 코드 */}
+                    <div className="col-span-1 flex items-center justify-center">
+                      {result === "PASS" &&
+                        <button
+                          type="button"
+                          disabled={true}
+                          className="inline-flex items-center px-2 py-0.5 rounded-full border border-dashed border-gray-300 dark:border-gray-600 text-[10px] text-gray-400"
+                          title="실패 코드 설정"
+                        >
+                          실패 없음
+                        </button>
+                      }
+                      {result !== "PASS" && failCodeStr && (
+                        <button
+                          type="button"
+                          onClick={handleFailCodeClick}
+                          className="inline-flex items-center px-2 py-0.5 rounded-full border border-rose-50 font-semibold bg-rose-50 dark:border-rose-600 text-[11px] text-rose-700 dark:text-rose-200 hover:bg-rose-100 dark:hover:bg-rose-700/60"
+                          title="실패 코드 상세 보기 / 수정"
+                        >
+                          {failCodeStr}
+                        </button>
+                      )}
+                      {result !== "PASS" && !failCodeStr && (
+                        <button
+                          type="button"
+                          onClick={handleFailCodeClick}
+                          className="inline-flex items-center px-2 py-0.5 rounded-full border border-gray-300 dark:border-gray-600 text-[10px] text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700/60"
+                          title="실패 코드 상세 보기 / 수정"
+                        >
+                          코드 없음
+                        </button>
+                      )}
+                    </div>
+
+                    {/* 증거 */}
                     <div className="col-span-1 flex items-center justify-center">
                       {evidenceStr ? (
                         <button
@@ -108,6 +167,8 @@ export default function TestCaseResultTable({
                         <span className="text-gray-400">-</span>
                       )}
                     </div>
+
+                    {/* 이슈 */}
                     <div className="col-span-1 flex items-center justify-center">
                       {issueId ? (
                         <a
