@@ -163,19 +163,6 @@ export default function ScenarioDetailPage() {
               open={openCases}
               onToggle={() => setOpenCases((v) => !v)}
             />
-
-            {/* 원본 JSON (디버깅용) */}
-            <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200/50 dark:border-gray-700/50 overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2">
-                <span className="material-symbols-outlined text-gray-500 dark:text-gray-400">data_object</span>
-                <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">원본 JSON</h3>
-              </div>
-              <div className="px-6 py-4">
-                <pre className="overflow-auto rounded-lg bg-gray-50 dark:bg-gray-900/40 p-4 text-xs text-gray-800 dark:text-gray-200">
-{JSON.stringify(scenario, null, 2)}
-                </pre>
-              </div>
-            </section>
           </>
         )}
       </div>
