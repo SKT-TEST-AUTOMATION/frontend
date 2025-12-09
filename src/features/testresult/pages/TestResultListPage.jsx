@@ -15,6 +15,7 @@ import { useJiraIssueModal } from "../hooks/useJiraIssueModal";
 import ResultBadge from "../components/ResultBadge";
 import TestCaseResultTable from "../components/TestCaseResultTable.jsx";
 import TestResultFilterBar from '../components/TestResultFilterBar.jsx';
+import FailCodeModal from '../components/FailCodeModal.jsx';
 
 // TestResultListPage.jsx 상단 부분
 const DEFAULT_FILTER = {
@@ -97,6 +98,61 @@ export default function TestResultListPage() {
     open: false,
     images: [],
   });
+
+  // 5) 실패 코드 모달 상태
+  const [failCodeModal, setFailCodeModal] = useState({
+    open: false,
+    currentFailCode: null,
+    targetInfo : null,
+    payload : null,
+  })
+
+  // 실패 코드 모달 열기 핸들러
+  const handleOpenFailCodeModal = (payload) => {
+    setFailCodeModal({
+      open: true,
+      currentFailCode: payload.failCode ?? null,
+      targetInfo: {
+        caseCode: payload.caseCode,
+        caseName: payload.caseName,
+      },
+      payload, // 나중에 저장 API 호출 시 사용
+    });
+  };
+
+  const handleCloseFailCodeModal = () => {
+    setFailCodeModal({
+      open: false,
+      currentFailCode: null,
+      targetInfo: null,
+      payload: null,
+    });
+  };
+
+  // 실패 코드 저장 핸들러 (백엔드 업데이트 API는 아직 없으니 TODO로 표시)
+  const handleSaveFailCode = async (newCode) => {
+    const { payload } = failCodeModal;
+    if (!payload) return;
+
+    const { runId, testCaseRow } = payload;
+
+    // TODO: 여기에서 백엔드에 실패 코드 업데이트 API 호출
+    // 예시 (실제 API path/파라미터는 구현에 맞게 수정 필요):
+    // await updateTestCaseFailCode({
+    //   runId,
+    //   testCaseResultId: testCaseRow.id,
+    //   failCode: newCode,
+    // });
+    //
+    // 그리고 tcMap을 갱신하거나, useScenarioTestCaseResults 훅에
+    // updateTestCaseFailCode 같은 updater를 만들어 호출하면 됩니다.
+
+    console.log("save failCode", {
+      runId,
+      testCaseRow,
+      newCode,
+    });
+  };
 
   const HEADERS = [
     { key: "id", label: "실행 ID", span: 1, align: "left" },
@@ -326,6 +382,7 @@ export default function TestResultListPage() {
                               setEvidencePreview({ open: true, images })
                             }
                             onClickCreateJira={openJiraCreateModal}
+                            onClickFailCode={handleOpenFailCodeModal}
                           />
 
                           {/* 에러 메시지 */}
@@ -396,6 +453,15 @@ export default function TestResultListPage() {
         open={evidencePreview.open}
         images={evidencePreview.images}
         onClose={() => setEvidencePreview({ open: false, images: [] })}
+      />
+
+      {/* 실패 코드 선택 / 수정 모달 */}
+      <FailCodeModal
+        open={failCodeModal.open}
+        currentFailCode={failCodeModal.currentFailCode}
+        targetInfo={failCodeModal.targetInfo}
+        onClose={handleCloseFailCodeModal}
+        onSave={handleSaveFailCode}
       />
     </>
   );
