@@ -16,6 +16,7 @@ import ResultBadge from "../components/ResultBadge";
 import TestCaseResultTable from "../components/TestCaseResultTable.jsx";
 import TestResultFilterBar from '../components/TestResultFilterBar.jsx';
 import FailCodeModal from '../components/FailCodeModal.jsx';
+import { useNavigate } from 'react-router-dom';
 
 // TestResultListPage.jsx 상단 부분
 const DEFAULT_FILTER = {
@@ -27,6 +28,7 @@ const DEFAULT_FILTER = {
 };
 
 export default function TestResultListPage() {
+  const navigate = useNavigate();
   const [filterForm, setFilterForm] = useState(DEFAULT_FILTER);
 
   const [periodError, setPeriodError] = useState("");
@@ -154,6 +156,11 @@ export default function TestResultListPage() {
     });
   };
 
+  const handleRowClick = (id) => {
+    if (!id) return;
+    navigate(`/results/${id}/detail`);
+  };
+
   const HEADERS = [
     { key: "id", label: "실행 ID", span: 1, align: "left" },
     { key: "test", label: "테스트 코드 / 명칭", span: 2 },
@@ -270,7 +277,8 @@ export default function TestResultListPage() {
                 return (
                   <div key={id} className="group">
                     {/* 한 줄 요약 Row */}
-                    <div className="grid grid-cols-12 gap-4 px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
+                    <div className="grid grid-cols-12 gap-4 px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors"
+                         onClick={() => handleRowClick(id)}>
                       {/* 실행 ID */}
                       <div className="col-span-1 text-gray-900 dark:text-gray-100">
                         {id}
@@ -356,7 +364,10 @@ export default function TestResultListPage() {
                       <div className="col-span-1 flex items-center justify-between sm:justify-center gap-2">
                         <ResultBadge result={runResult} />
                         <button
-                          onClick={() => toggleExpand(id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleExpand(id)}
+                          }
                           className="inline-flex items-center gap-1.5 px-2 py-1.5 text-blue-600 hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-900/20 rounded-md"
                           title="상세 보기"
                         >

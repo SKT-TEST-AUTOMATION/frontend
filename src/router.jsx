@@ -18,6 +18,7 @@ import DeviceFarmPageDummy from "./features/device-farm/DeviceFarmPageDummy";
 import TestScheduleListPage from "./features/runs/pages/TestScheduleListPage";
 import TestScheduleDetailPage from './features/runs/pages/TestScheduleDetailPage.jsx';
 import ScenarioTestDetailPage from './features/runs/pages/ScenarioTestDetailPage.jsx';
+import TestResultDetailPage from './features/testresult/pages/TestResultDetailPage.jsx';
 
 export const routes = [
   { path: "/", element: <LandingPage /> },
@@ -51,7 +52,11 @@ export const routes = [
           { path : "batches", element: <TestScheduleListPage /> },
           { path : "batches/:scheduleId", element: <TestScheduleDetailPage /> }
         ]},
-      { path: "results", element: <TestResultListPage /> },
+      { path: "results", children: [
+          { index: true, element: <TestResultListPage /> },
+          { path : ":scenarioTestRunId/detail", element: <TestResultDetailPage /> },
+        ]},
+      // { path: "results", element: <TestResultListPage /> },
       { path: "registry/devices", element: <DeviceFarmPage /> },
       { path: "*", element: <NotFoundPage /> },
     ],
