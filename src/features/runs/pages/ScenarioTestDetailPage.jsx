@@ -4,7 +4,7 @@ import React, {
   useCallback,
   useRef,
 } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { getScenarioTest } from "../../../services/scenarioAPI";
 import { getRecentScenarioTestRuns } from "../../../services/testAPI.js";
 import { runScenarioTest } from "../../../services/runAPI.js";
@@ -65,9 +65,11 @@ const transformRecentRuns = (apiRuns) => {
     }
 
     const isZeroDuration = !end || durationSec === 0;
+    const scenarioTestRunId = r.scenarioTestRunId ?? r.id ?? null;
 
     return {
-      id: r.id,
+      id: scenarioTestRunId,
+      scenarioTestRunId,
       runNumber: total - index,
       status: mapRunResultToStatus(r.runResult),
       duration: durationSec,
@@ -568,6 +570,7 @@ const ScenarioTestDetailPage = () => {
   const [isExecuting, setIsExecuting] = useState(false);
 
   const [historySize, setHistorySize] = useState(10);
+  const navigate = useNavigate();
 
   const fetchData = useCallback(
     async (signal) => {
@@ -604,47 +607,6 @@ const ScenarioTestDetailPage = () => {
     return () => controller.abort();
   }, [fetchData]);
 
-  const handleRunTest = async () => {
-    if (!data) return;
-
-    setIsExecuting(true);
-    setToast({
-      id: Date.now().toString(),
-      type: "info",
-      message: "테스트 실행을 요청했습니다.",
-    });
-
-    try {
-      await runScenarioTest(data.id);
-
-      setData((prev) =>
-        prev
-          ? {
-            ...prev,
-            running: true,
-          }
-          : null
-      );
-
-      setTimeout(() => {
-        setIsExecuting(false);
-        fetchData();
-        setToast({
-          id: Date.now().toString(),
-          type: "success",
-          message: "테스트가 완료되었습니다.",
-        });
-      }, 3000);
-    } catch (e) {
-      setToast({
-        id: Date.now().toString(),
-        type: "error",
-        message: "테스트 실행 실패",
-      });
-      setIsExecuting(false);
-    }
-  };
-
   const handleRefresh = () => {
     fetchData();
     setToast({
@@ -652,6 +614,13 @@ const ScenarioTestDetailPage = () => {
       type: "info",
       message: "데이터를 새로고침했습니다.",
     });
+  };
+
+  const handleClickRunRow = (run) => {
+    const scenarioTestRunId = run.scenarioTestRunId ?? run.id;
+    if (!scenarioTestRunId) return; // id 없으면 이동 X
+
+    navigate(`/results/${encodeURIComponent(scenarioTestRunId)}/detail`);
   };
 
   if (loading && !data) {
@@ -928,15 +897,25 @@ const ScenarioTestDetailPage = () => {
                 </tr>
                 </thead>
                 <tbody>
-                {tableRuns.map((run) => (
-                  <tr
-                    key={run.id}
-                    className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60"
-                  >
-                    <td className="px-6 py-3 font-medium text-gray-900">
-                      #{run.runNumber}
-                    </td>
-                    <td className="px-6 py-3">
+                {tableRuns.map((run) => {
+                  const clickableId = run.scenarioTestRunId ?? run.id;
+                  const isClickable = !!clickableId;
+
+                  return (
+                    <tr
+                      key={run.runNumber}
+                      onClick={() => isClickable && handleClickRunRow(run)}
+                      className={
+                        "border-b border-gray-50 last:border-0 " +
+                        (isClickable
+                          ? "hover:bg-gray-50/60 cursor-pointer"
+                          : "hover:bg-gray-50/40")
+                      }
+                    >
+                      <td className="px-6 py-3 font-medium text-gray-900">
+                        #{run.runNumber}
+                      </td>
+                      <td className="px-6 py-3">
                         <span
                           className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
                             run.status === "PASS"
@@ -944,26 +923,27 @@ const ScenarioTestDetailPage = () => {
                               : "bg-rose-50 text-rose-700"
                           }`}
                         >
-                          {run.status === "PASS" ? "성공" : "실패"}
+                       {run.status === "PASS" ? "성공" : "실패"}
                         </span>
-                    </td>
-                    <td className="px-6 py-3">
-                      {run.startedAt
-                        ? new Date(run.startedAt).toLocaleString()
-                        : "-"}
-                    </td>
-                    <td className="px-6 py-3 text-right font-mono text-gray-600">
-                      {run.duration > 0 ? (
-                        `${run.duration}초`
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-[11px] text-gray-600">
-                            <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
-                            시간 기록 없음
-                          </span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="px-6 py-3">
+                        {run.startedAt
+                          ? new Date(run.startedAt).toLocaleString()
+                          : "-"}
+                      </td>
+                      <td className="px-6 py-3 text-right font-mono text-gray-600">
+                        {run.duration > 0 ? (
+                          `${run.duration}초`
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-[11px] text-gray-600">
+              <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+              시간 기록 없음
+            </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
                 {tableRuns.length === 0 && (
                   <tr>
                     <td
