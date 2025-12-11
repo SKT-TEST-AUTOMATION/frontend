@@ -80,6 +80,23 @@ function smartMerge(base, patch) {
   return merged;
 }
 
+/**
+ * STEP_* 이벤트 공통에서 evidencePath를 추출하는 헬퍼
+ * 우선순위:
+ * 1) error.evidencePath
+ * 2) root.evidencePath
+ * 3) step.evidencePath
+ * 4) extra.evidencePath
+ */
+function extractEvidencePath(e, stepObj) {
+  if (!e && !stepObj) return undefined;
+  if (e?.error?.evidencePath) return e.error.evidencePath;
+  if (e?.evidencePath) return e.evidencePath;
+  if (stepObj?.evidencePath) return stepObj.evidencePath;
+  if (e?.extra?.evidencePath) return e.extra.evidencePath;
+  return undefined;
+}
+
 // --- UI Helpers ---
 
 function fmtSelector(sel) {
@@ -159,8 +176,12 @@ const ResultPill = ({ result }) => {
 const EvidenceModal = ({ open, onClose, step }) => {
   if (!open || !step) return null;
 
-  const okUrl = toEvidenceUrl(step.okImg || step.evidencePath);
-  const failUrl = toEvidenceUrl(step.failImg || step.evidencePath);
+  // OK/FAIL 관계없이 하나의 Evidence URL로 통합
+  const evidenceUrl = toEvidenceUrl(
+    step.failImg || step.okImg || step.evidencePath
+  );
+
+  const isFail = (step.result || "").toLowerCase() === "fail";
 
   return (
     <div
@@ -193,23 +214,23 @@ const EvidenceModal = ({ open, onClose, step }) => {
         {/* 바디 */}
         <div className="flex-1 overflow-auto p-6 bg-slate-100 dark:bg-slate-950">
           <div className="grid grid-cols-1 lg:grid-cols-1 gap-6">
-            {/* Failure Image */}
+            {/* Evidence Image */}
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold uppercase tracking-wider text-rose-600 dark:text-rose-400">
-                  Failure/Evidence State
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                  {isFail ? "Failure State" : "Evidence Snapshot"}
                 </span>
-                {!failUrl && (
+                {!evidenceUrl && (
                   <span className="text-xs text-slate-400 italic">
                     Not available
                   </span>
                 )}
               </div>
               <div className="aspect-video bg-slate-200 dark:bg-slate-900 rounded-lg border border-slate-300 dark:border-slate-800 overflow-hidden flex items-center justify-center relative group">
-                {failUrl ? (
+                {evidenceUrl ? (
                   <img
-                    src={failUrl}
-                    alt="Failure"
+                    src={evidenceUrl}
+                    alt="Evidence"
                     className="w-full h-full object-contain"
                   />
                 ) : (
@@ -301,9 +322,7 @@ export default function RunReportPanel({
   }, []);
 
   const deriveStatus = useCallback((arr, runningHint) => {
-    // 1) 스텝이 하나도 없을 때
     if (!arr || arr.length === 0) {
-      // 라이브로 아직 돌고 있는 경우엔 RUNNING, 아니면 N/A
       return runningHint ? "RUNNING" : "N/A";
     }
 
@@ -313,19 +332,14 @@ export default function RunReportPanel({
     const hasUnknown = arr.some((s) => !s.result || s.result === "na");
     const hasOk = arr.some((s) => s.result === "ok");
 
-    // 2) 실행 중인 경우: 아직 안 끝난 스텝(na)이 있으면 RUNNING
     if (runningHint && hasUnknown) {
       return "RUNNING";
     }
 
-    // 3) 실행이 끝난 경우
-    //   - fail은 위에서 걸러졌으니,
-    //   - ok가 하나도 없고, 전부 na이거나 미지정이면 N/A
     if (!hasOk) {
       return "N/A";
     }
 
-    // 4) 그 외: 전부 ok 라고 가정 → PASS
     return "PASS";
   }, []);
 
@@ -346,7 +360,9 @@ export default function RunReportPanel({
       else if (stepObj?.cond) out.visibleIf = { expr: stepObj.cond };
     }
 
-    if (type === "STEP_OK") out.result = "ok";
+    if (type === "STEP_OK") {
+      out.result = "ok";
+    }
 
     if (type === "STEP_FAIL") {
       out.result = "fail";
@@ -354,24 +370,17 @@ export default function RunReportPanel({
       // 에러 메시지
       if (e?.error?.reason) out.reason = e.error.reason;
 
-      // evidence 경로: error / root / step / extra 순으로 채우기
-      if (e?.error?.evidencePath) out.evidencePath = e.error.evidencePath;
-      if (e?.evidencePath && !out.evidencePath) out.evidencePath = e.evidencePath;
-      if (stepObj?.evidencePath && !out.evidencePath)
-        out.evidencePath = stepObj.evidencePath;
-      if (e?.extra?.evidencePath && !out.evidencePath)
-        out.evidencePath = e.extra.evidencePath;
-
       if (e?.failImg) out.failImg = e.failImg;
     }
 
     if (type === "STEP_SKIP") out.result = "skip";
 
+    // 공통 시간 / OK 이미지
     if (e?.elapsedMs != null || stepObj?.ms != null)
       out.ms = stepObj?.ms ?? e?.elapsedMs;
     if (e?.okImg) out.okImg = e.okImg;
 
-    // ARTIFACT 이벤트
+    // ARTIFACT 이벤트: path/url 기반 Evidence
     if (type === "ARTIFACT" && (e?.path || e?.url) && no != null) {
       const imgPath = e.path || e.url;
       const mime = e?.mime || e?.contentType || e?.kind || "";
@@ -382,6 +391,13 @@ export default function RunReportPanel({
       ) {
         out.failImg = out.failImg || imgPath;
       }
+      return out;
+    }
+
+    // STEP_OK / STEP_FAIL 등에서 evidencePath 공통 처리
+    const evPath = extractEvidencePath(e, stepObj);
+    if (evPath && !out.evidencePath) {
+      out.evidencePath = evPath;
     }
 
     return out;
@@ -421,7 +437,8 @@ export default function RunReportPanel({
       if (
         type.startsWith("STEP") ||
         type === "SHEET_END" ||
-        type === "SHEET_START"
+        type === "SHEET_START" ||
+        type === "ARTIFACT"
       ) {
         const patch = normalizeStepFromEvent(obj);
         if (patch.no != null) {
@@ -624,7 +641,8 @@ export default function RunReportPanel({
       "RUN_EXIT",
       "ERROR",
       "LOG",
-      "RAW"
+      "RAW",
+      "ARTIFACT"
     ].forEach((t) => es.addEventListener(t, onAny));
     es.onerror = () => {
       setConnected(false);
@@ -957,7 +975,6 @@ export default function RunReportPanel({
                       <td colSpan={6} className="px-4 py-0">
                         <div className="py-4 lg:py-5 border-t border-slate-200/80 dark:border-slate-800/80">
                           <div className="flex flex-col gap-4">
-
                             {/* 상단 메타 + Evidence 버튼 */}
                             <div className="flex flex-wrap items-center justify-between gap-3">
                               {/* 메타 정보 */}
@@ -1031,7 +1048,6 @@ export default function RunReportPanel({
                       </td>
                     </tr>
                   )}
-
                 </React.Fragment>
               );
             })}

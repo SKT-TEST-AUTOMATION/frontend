@@ -21,7 +21,7 @@ export function FilePlusIcon(props) {
   );
 }
 
-export function StartChooser({ onPickUpload, onPickEmpty, disabled }) {
+export function StartChooser({ onPickUpload, onPickEmpty, disabled, onPickStepEditor }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {/* 업로드 카드 */}
@@ -45,17 +45,17 @@ export function StartChooser({ onPickUpload, onPickEmpty, disabled }) {
       <button
         type="button"
         disabled={disabled}
-        onClick={onPickEmpty}
+        onClick={onPickStepEditor}
         className="group h-44 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 backdrop-blur text-left p-5 transition-colors hover:border-emerald-300/60 hover:bg-emerald-50/40 dark:hover:bg-emerald-900/10 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <div className="flex items-center gap-3">
           <span className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800"><FilePlusIcon /></span>
           <div>
             <div className="font-semibold">빈 템플릿으로 빠르게 시작</div>
-            <div className="text-sm text-slate-500 dark:text-slate-400">필수 컬럼만 갖춘 기본 시트를 생성합니다.</div>
+            <div className="text-sm text-slate-500 dark:text-slate-400">기본 시트를 생성합니다.</div>
           </div>
         </div>
-        <div className="mt-4 text-xs text-slate-500">권장 헤더: no, action, by, value, input_text, visible_if, mandatory, wait, memo</div>
+        <div className="mt-4 text-xs text-slate-500"></div>
       </button>
     </div>
   );
