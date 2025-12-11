@@ -1,4 +1,3 @@
-// ExcelEditor.jsx
 import React, {
   useState,
   useRef,
@@ -9,7 +8,6 @@ import React, {
 import {
   Upload,
   Save,
-  FileSpreadsheet,
   ArrowRight,
   ArrowDown,
   ArrowUp,
@@ -22,10 +20,11 @@ import {
 } from "lucide-react";
 import { readFile, saveFile } from "../../utils/excelUtils";
 import { cn } from "../../utils/cn";
+import { STEP_HEADERS } from "../../../features/testcase/constants/stepConstants.js";
 
 const ExcelEditor = forwardRef(function ExcelEditor(
   {
-    initialData,
+    initialData,            // { sheetName: AOA } 또는 AOA
     className,
     title = "Excel Editor",
     subtitle = "Spreadsheet Component",
@@ -33,44 +32,129 @@ const ExcelEditor = forwardRef(function ExcelEditor(
     columnDescriptions = {},
     onSave,
     readOnly = true,
-    uploadScope = "workbook",
+    uploadScope = "workbook",  // "sheet" / "workbook" (현재는 버튼 표시 정도에만 사용)
+    sheetName,
+    onActiveSheetChange
   },
   ref
 ) {
   const isReadOnly = !!readOnly;
+  const fallbackSheetName = sheetName || "TestCase";
 
-  // --- State ---
-  const [sheets, setSheets] = useState(() => {
-    if (initialData) {
-      return { Sheet1: initialData };
+  // --- initialData 정규화 유틸 ---
+  const parseInitialData = (raw) => {
+    if (!raw) return null;
+
+    // 1) 단일 시트 AOA
+    if (Array.isArray(raw)) {
+      return { [fallbackSheetName]: raw };
     }
-    const genericData = [
-      ["Header 1", "Header 2", "Header 3"],
-      ["", "", ""],
-      ["", "", ""],
-      ["", "", ""],
-      ["", "", ""],
-      ["", "", ""],
-    ];
-    return { Sheet1: genericData };
-  });
 
-  const [sheetNames, setSheetNames] = useState(["Sheet1"]);
-  const [activeSheet, setActiveSheet] = useState("Sheet1");
+    // 2) readFile() 래퍼 { sheets: {...}, sheetNames: [...] }
+    if (
+      typeof raw === "object" &&
+      !Array.isArray(raw) &&
+      raw.sheets &&
+      typeof raw.sheets === "object" &&
+      !Array.isArray(raw.sheets)
+    ) {
+      return raw.sheets;
+    }
+
+    // 3) 이미 { sheetName: AOA } 형태라고 가정
+    if (typeof raw === "object" && !Array.isArray(raw)) {
+      return raw;
+    }
+
+    return null;
+  };
+
+  // --- 초기 워크북 상태 계산 ---
+  const buildInitialSheets = () => {
+    const parsed = parseInitialData(initialData);
+
+    // 1) 데이터가 아예 없으면 → STEP_HEADERS + 빈 행 1개
+    if (!parsed || Object.keys(parsed).length === 0) {
+      const header = [...STEP_HEADERS];
+      const emptyRow = new Array(header.length).fill("");
+      return { [fallbackSheetName]: [header, emptyRow] };
+    }
+
+    // 2) 들어온 데이터는 "그대로" 사용 (헤더/내용 손대지 않기)
+    return parsed;
+  };
+
+  const initialSheets = buildInitialSheets();
+  const initialSheetNames = Object.keys(initialSheets);
+  const initialActiveSheet =
+    initialSheetNames.includes(fallbackSheetName) && fallbackSheetName
+      ? fallbackSheetName
+      : initialSheetNames[0] || fallbackSheetName;
+
+  const [sheets, setSheets] = useState(initialSheets);
+  const [sheetNames, setSheetNames] = useState(initialSheetNames);
+  const [activeSheet, setActiveSheet] = useState(initialActiveSheet);
+
+  useEffect(() => {
+    const nextSheets = buildInitialSheets();
+    const names = Object.keys(nextSheets);
+
+    const nextActive =
+      names.includes(activeSheet) && activeSheet
+        ? activeSheet
+        : names.includes(fallbackSheetName)
+          ? fallbackSheetName
+          : names[0] || fallbackSheetName;
+
+    setSheets(nextSheets);
+    setSheetNames(names);
+    setActiveSheet(nextActive);
+    setSelectedCell(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialData, fallbackSheetName]);
+
   const [fileName, setFileName] = useState(defaultFileName);
   const [selectedCell, setSelectedCell] = useState(null);
-  const [isDragging, setIsDragging] = useState(false);
   const [contextMenu, setContextMenu] = useState(null);
-
-  // Sheet Renaming State
   const [editingSheetName, setEditingSheetName] = useState(null);
-
-  const fileInputRef = useRef(null);
 
   // Derived state
   const data = sheets[activeSheet] || [[""]];
   const numRows = data.length;
   const numCols = data[0] ? data[0].length : 0;
+
+  // initialData가 바뀌었을 때 워크북 재계산
+  useEffect(() => {
+    const nextSheets = buildInitialSheets();
+    const names = Object.keys(nextSheets);
+
+    const nextActive =
+      names.includes(activeSheet) && activeSheet
+        ? activeSheet
+        : names.includes(fallbackSheetName)
+          ? fallbackSheetName
+          : names[0] || fallbackSheetName;
+
+    setSheets(nextSheets);
+    setSheetNames(names);
+    setActiveSheet(nextActive);
+    setSelectedCell(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialData, fallbackSheetName]);
+
+  // 🔹 activeSheet / sheets가 정리된 후 상위로 한번 알려주기
+  useEffect(() => {
+    if (!onActiveSheetChange) return;
+    if (!activeSheet) return;
+    const aoa = sheets?.[activeSheet];
+    if (!Array.isArray(aoa)) return;
+
+    onActiveSheetChange({
+      sheetName: activeSheet,
+      sheetAOA: aoa,
+    });
+  }, [onActiveSheetChange, activeSheet, sheets]);
+
 
   // --- Helpers ---
   const handleSetData = (newData) => {
@@ -110,30 +194,15 @@ const ExcelEditor = forwardRef(function ExcelEditor(
     return () => document.removeEventListener("click", handleClickOutside);
   }, [editingSheetName]);
 
-  // --- File Handlers ---
-
-  const handleFileUpload = async (e) => {
-    if (isReadOnly) return;
-    const file = e.target.files?.[0];
-    processFile(file);
-  };
-
-  const handleDrop = async (e) => {
-    e.preventDefault();
-    if (isReadOnly) return;
-    setIsDragging(false);
-    const file = e.dataTransfer.files?.[0];
-    processFile(file);
-  };
 
   const processFile = async (file) => {
     if (isReadOnly) return;
     if (file && (file.name.endsWith(".xlsx") || file.name.endsWith(".xls"))) {
       try {
-        const result = await readFile(file);
+        const result = await readFile(file); // { sheets, sheetNames }
         setSheets(result.sheets);
         setSheetNames(result.sheetNames);
-        setActiveSheet(result.sheetNames[0]);
+        setActiveSheet(result.sheetNames[0]); // 첫 번째 시트로 보이기
         setFileName(file.name);
         setSelectedCell(null);
       } catch (err) {
@@ -146,18 +215,21 @@ const ExcelEditor = forwardRef(function ExcelEditor(
   const handleSave = () => {
     if (isReadOnly) return;
 
-    // 1) 현재 시트 데이터만 뽑기
-    const currentSheetData = sheets[activeSheet] || [[""]];
+    const workbookToSave = sheets;
+    const sheetToSave = sheets[activeSheet];
 
-    // 2) ExcelUtils의 형식을 맞추기 위해, 시트 이름을 key 로 가진 객체 생성
-    const singleSheet = {
-      [activeSheet]: currentSheetData,
-    };
-
-    if (onSave) {
-      onSave(singleSheet, fileName);
+    if (uploadScope === "sheet") {
+      if (onSave) {
+        onSave(sheetToSave, fileName); // ★ 워크북 전체 전달
+      } else {
+        saveFile(sheetToSave, fileName);
+      }
     } else {
-      saveFile(singleSheet, fileName);
+      if (onSave) {
+        onSave(workbookToSave, fileName); // ★ 워크북 전체 전달
+      } else {
+        saveFile(workbookToSave, fileName);
+      }
     }
   };
 
@@ -213,7 +285,6 @@ const ExcelEditor = forwardRef(function ExcelEditor(
     if (isReadOnly) return;
 
     const targetSheet = targetSheetName || contextMenu?.sheetName;
-
     if (!targetSheet) return;
 
     if (sheetNames.length <= 1) {
@@ -222,7 +293,7 @@ const ExcelEditor = forwardRef(function ExcelEditor(
       return;
     }
 
-    if (!window.confirm(`Are you sure you want to delete "${targetSheet}"?`)) {
+    if (!window.confirm(`"${targetSheet}" 시트를 삭제하시겠습니까?`)) {
       setContextMenu(null);
       return;
     }
@@ -264,7 +335,7 @@ const ExcelEditor = forwardRef(function ExcelEditor(
     }
 
     if (sheetNames.includes(trimmed)) {
-      alert(`A sheet with the name "${trimmed}" already exists.`);
+      alert(`"${trimmed}" 이름의 시트가 이미 존재합니다.`);
       return;
     }
 
@@ -329,8 +400,6 @@ const ExcelEditor = forwardRef(function ExcelEditor(
   const handleRowContextMenu = (e, rowIndex) => {
     e.preventDefault();
     if (rowIndex === 0) return;
-    // readOnly 에서도 “설명” 같은 걸 보여줄 생각이면 열어도 되지만,
-    // 여기서는 아예 메뉴를 안 띄우도록 처리
     if (isReadOnly) return;
 
     const pos = getContextMenuPosition(e.clientX, e.clientY);
@@ -447,22 +516,9 @@ const ExcelEditor = forwardRef(function ExcelEditor(
   return (
     <div
       className={cn(
-        "flex flex-col h-full bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden relative",
+        "flex flex-col h-full min-h-0 bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden relative",
         className
       )}
-      onDragOver={(e) => {
-        e.preventDefault();
-        if (isReadOnly) return;
-        setIsDragging(true);
-      }}
-      onDragLeave={() => {
-        if (isReadOnly) return;
-        setIsDragging(false);
-      }}
-      onDrop={handleDrop}
-      onClick={() => {
-        if (editingSheetName) setEditingSheetName(null);
-      }}
     >
       {/* --- Toolbar --- */}
       <div className="flex flex-wrap items-center justify-between p-3 border-b border-gray-200 bg-gray-50 gap-2 shrink-0">
@@ -485,7 +541,7 @@ const ExcelEditor = forwardRef(function ExcelEditor(
           </div>
           <div className="h-6 w-px bg-gray-300 mx-1 hidden sm:block"></div>
 
-          {/* 파일 업로드는 현재 주석 처리 상태이지만, 사용할 경우 readOnly 체크 */}
+          {/* 필요 시 파일 업로드 복원 가능 */}
           {/*<input
             type="file"
             ref={fileInputRef}
@@ -494,7 +550,6 @@ const ExcelEditor = forwardRef(function ExcelEditor(
             className="hidden"
             disabled={isReadOnly}
           />*/}
-
         </div>
         {!isReadOnly && uploadScope === "sheet" && (
           <button
@@ -509,19 +564,8 @@ const ExcelEditor = forwardRef(function ExcelEditor(
           >
             <Save size={16} /> 시트 업로드
           </button>
-          )
-        }
+        )}
       </div>
-
-      {/* --- Overlay --- */}
-      {isDragging && !isReadOnly && (
-        <div className="absolute inset-0 bg-blue-500/10 backdrop-blur-sm z-5 flex flex-col items-center justify-center border-4 border-blue-500 border-dashed rounded-lg m-2 pointer-events-none">
-          <Upload size={48} className="text-blue-600 mb-2" />
-          <p className="text-xl font-bold text-blue-700">
-            Drop Excel File Here
-          </p>
-        </div>
-      )}
 
       {/* --- Grid --- */}
       <div className="flex-1 overflow-auto relative bg-gray-100">
@@ -562,9 +606,7 @@ const ExcelEditor = forwardRef(function ExcelEditor(
                       }
                       className={cn(
                         "w-full h-full px-2 py-1 bg-transparent text-sm font-bold text-gray-700 text-center outline-none placeholder-gray-300",
-                        isReadOnly
-                          ? "cursor-default"
-                          : "focus:bg-white"
+                        isReadOnly ? "cursor-default" : "focus:bg-white"
                       )}
                       placeholder="Column Name"
                     />
@@ -681,15 +723,22 @@ const ExcelEditor = forwardRef(function ExcelEditor(
                 onContextMenu={(e) => handleSheetContextMenu(e, name)}
                 onDoubleClick={() => !isReadOnly && setEditingSheetName(name)}
                 className={cn(
-                  "flex items-center gap-2 px-4 py-1.5 text-sm transition-all select-none min-w-[100px] max-w-[200px] rounded-t-lg relative top-[1px] border border-b-0 cursor-pointer",
+                  "flex items-center gap-2 px-4 py-1.5 text-xs transition-all select-none min-w-[100px] max-w-[250px] rounded-t-lg relative top-[1px] border border-b-0 cursor-pointer",
                   isActive
-                    ? "bg-white text-blue-700 font-bold border-gray-300 border-t-2 border-t-blue-600 shadow-sm z-1"
+                    ? "bg-white text-blue-700 font-bold border-gray-300 border-t-2 border-t-blue-600 shadow-sm z-1 min-w-[150px]"
                     : "bg-gray-100 text-gray-500 border-gray-300 hover:bg-gray-50 hover:text-gray-700",
                   isReadOnly && "cursor-default"
                 )}
                 onClick={() => {
                   if (!isRenaming) {
-                    setActiveSheet(name);
+                    const nextSheet = name;
+                    const nextAOA = sheets?.[name];
+
+                    if (onActiveSheetChange && nextSheet && Array.isArray(nextAOA)) {
+                      onActiveSheetChange({sheetName: name, sheetAOA: sheets?.[name]});
+                    }
+
+                    setActiveSheet(nextSheet);
                     setSelectedCell(null);
                   }
                 }}

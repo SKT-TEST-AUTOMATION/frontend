@@ -8,7 +8,7 @@ import { useRef, useCallback } from "react";
  *
  * 사용 예시:
  * ------------------------------------------------------------------
- * const { ref, getSheets, setSheets, save, download } = useExcelEditor();
+ * constants { ref, getSheets, setSheets, save, download } = useExcelEditor();
  *
  * return (
  *   <>

@@ -37,3 +37,12 @@ export async function deleteSchedule(id) {
   return res?.data?.data ?? res?.data;
 }
 
+// 테스트 스케줄 실행 목록 조회
+export async function getTestScheduleRuns(id, params = {}, signal) {
+  const { page = 0, size = 10, sort = "id,desc"} = params;
+  const res = await api.get(`scenarios/test-schedules/${id}/runs`, {
+    signal,
+    params: { page, size, sort}
+  });
+  return res;
+}

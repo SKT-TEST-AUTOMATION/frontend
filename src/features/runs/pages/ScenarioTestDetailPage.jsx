@@ -25,8 +25,8 @@ import { useExcelTabState } from "../../testcase/hooks/useExcelTabState.js";
 import { useExcelEditor } from "../../../shared/hooks/useExcelEditor.js";
 import { StartChooser } from "../../testcase/components/excel/StartChooser.jsx";
 import { downloadFile } from "../../../shared/utils/fileUtils";
-import { useToast } from '../../../shared/hooks/useToast.js';
-import { toErrorMessage } from '../../../services/axios.js';
+import { useToast } from "../../../shared/hooks/useToast.js";
+import { toErrorMessage } from "../../../services/axios.js";
 
 // ──────────────────────────────────────────────
 // RunResult → PASS / FAIL 단순 매핑
@@ -326,19 +326,23 @@ const ScenarioExcelSection = ({
   );
 
   const {
-    file,
-    meta,
-    previewAOA,
-    uploading,
-    isRO,
+    // 상태
+    excelFile,
+    workbook,              // ✅ { [sheetName]: AOA }
+    activeSheetAOA,
+    isUploading,
+
+    // 파생 상태
+    isReadOnly,
     canEdit,
-    blocked,
-    loadServerExcel,
-    downloadServerExcel,
-    handlePickFile,
-    startFromTemplate,
-    uploadSheets,
-    resetPicker,
+    isLocked,
+    hasWorkbook,           // ✅ 훅에서 계산된 플래그
+
+    // 액션
+    downloadExcelFromServer,
+    loadLocalExcelFile,
+    startWithTemplateWorkbook,
+    uploadSheetsToServer,
   } = useExcelTabState({
     form: {
       code: scenario?.code,
@@ -351,25 +355,29 @@ const ScenarioExcelSection = ({
     downloadExcelAPI,
     uploadExcelAPI,
     autoLoadOnMount: true,
-    uploadScope: "workbook",
+    uploadScope: "workbook", // 시나리오는 워크북 단위 업로드
   });
 
-  const isDropDisabled = !canEdit || uploading;
-  const editorReadOnly = readOnly || isRO || blocked;
+  const isDropDisabled = !canEdit || isUploading;
+  const editorReadOnly = readOnly || isReadOnly || isLocked;
 
+  // 파일 input 변경 → 로컬 엑셀 로드
   const onInputChange = (e) => {
     const f = e.target.files?.[0];
-    handlePickFile(f);
+    if (f) {
+      loadLocalExcelFile(f);
+    }
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
+  // 드래그 드롭 업로드
   const onDrop = async (e) => {
     e.preventDefault();
     e.stopPropagation();
     setDragOver(false);
     const f = e.dataTransfer?.files?.[0];
     if (f) {
-      const ok = await handlePickFile(f);
+      const ok = await loadLocalExcelFile(f);
       if (!ok && fileInputRef.current) fileInputRef.current.value = "";
     }
   };
@@ -381,35 +389,21 @@ const ScenarioExcelSection = ({
 
   const onDragLeave = () => setDragOver(false);
 
+  // 현재 에디터 내용을 서버에 업로드 (워크북 전체)
   const handleUploadWorkbook = () => {
     if (!excelEditorRef.current) return;
-    const sheets = getSheets();
-    if (!sheets || Object.keys(sheets).length === 0) {
+    const sheetsMap = getSheets();             // ✅ { [sheetName]: AOA }
+    if (!sheetsMap || Object.keys(sheetsMap).length === 0) {
       console.warn("업로드할 시트 데이터가 없습니다.");
       return;
     }
-    uploadSheets(sheets, scenario?.code, scenarioTestId);
+    uploadSheetsToServer(sheetsMap, scenario?.code, scenarioTestId);
   };
 
-  const initialSheetData =
-    previewAOA && previewAOA.length > 0 ? previewAOA : [[""]];
-  const hasWorkbook = !!meta || !!file;
-
-  useEffect(() => {
-    if (!excelEditorRef.current) return;
-    if (!meta || !meta.sheets || meta.sheets.length === 0) return;
-
-    const sheetMap = {};
-    meta.sheets.forEach((name) => {
-      const aoa = meta.previewBySheet?.[name];
-      if (aoa && aoa.length > 0) {
-        sheetMap[name] = aoa;
-      }
-    });
-
-    if (Object.keys(sheetMap).length === 0) return;
-    excelEditorRef.current.setSheets(sheetMap);
-  }, [meta, excelEditorRef]);
+  // ExcelEditor 에 넘길 initialData
+  // - useExcelTabState 가 보장하는 workbook 구조 사용
+  const initialWorkbook =
+    workbook && Object.keys(workbook).length > 0 ? workbook : null;
 
   return (
     <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
@@ -441,19 +435,18 @@ const ScenarioExcelSection = ({
 
         <div className="flex flex-wrap items-center gap-2">
           {/* 다운로드 */}
-          { file && (
+          {excelFile && (
             <button
               type="button"
-              onClick={downloadServerExcel}
+              onClick={downloadExcelFromServer}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 shadow-sm"
             >
-            <span className="material-symbols-outlined text-sm">
-              download
-            </span>
+              <span className="material-symbols-outlined text-sm">
+                download
+              </span>
               다운로드
             </button>
-          )
-          }
+          )}
 
           {/* 파일 교체 (로컬 파일 선택 → 에디터 내용 교체) */}
           {!editorReadOnly && (
@@ -475,9 +468,9 @@ const ScenarioExcelSection = ({
             <button
               type="button"
               onClick={handleUploadWorkbook}
-              disabled={uploading}
+              disabled={isUploading}
               className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg shadow-sm ${
-                uploading
+                isUploading
                   ? "bg-blue-400 text-white cursor-not-allowed"
                   : "bg-blue-500 text-white hover:bg-blue-600"
               }`}
@@ -485,13 +478,13 @@ const ScenarioExcelSection = ({
               <span className="material-symbols-outlined text-sm">
                 upload
               </span>
-              {uploading ? "업로드 중..." : "업로드"}
+              {isUploading ? "업로드 중..." : "업로드"}
             </button>
           )}
         </div>
       </div>
 
-      {/* 드래그 앤 드롭 영역 (엑셀 없을 때만) */}
+      {/* 드래그 앤 드롭 영역 (엑셀이 아직 없을 때만) */}
       {!editorReadOnly && !hasWorkbook && (
         <div
           onDrop={onDrop}
@@ -512,7 +505,8 @@ const ScenarioExcelSection = ({
           <StartChooser
             disabled={isDropDisabled}
             onPickUpload={() => fileInputRef.current?.click()}
-            onPickEmpty={() => startFromTemplate()}
+            // ✅ 템플릿 시작 버튼 → 새 워크북 생성
+            onPickStepEditor={() => startWithTemplateWorkbook()}
           />
         </div>
       )}
@@ -523,7 +517,8 @@ const ScenarioExcelSection = ({
           <div className="h-[460px]">
             <ExcelEditor
               ref={excelEditorRef}
-              initialData={initialSheetData}
+              // ✅ 새 워크북 구조 그대로 전달 (multi-sheet 지원)
+              initialData={initialWorkbook}
               title={
                 excelFileName ||
                 `${scenario?.code || scenarioTestId || "scenario"}.xlsx`
@@ -533,8 +528,9 @@ const ScenarioExcelSection = ({
                 excelFileName ||
                 `${scenario?.code || scenarioTestId || "scenario"}.xlsx`
               }
-              onSave={(sheets) =>
-                uploadSheets(sheets, scenario?.code, scenarioTestId)
+              sheetName={scenario?.code}  // 기본 시트명 힌트
+              onSave={(sheetsMap) =>
+                uploadSheetsToServer(sheetsMap, scenario?.code, scenarioTestId)
               }
               columnDescriptions={{
                 no: "스텝 번호(가급적 숫자로 입력하세요).",
@@ -550,7 +546,7 @@ const ScenarioExcelSection = ({
                 mandatory: "필수 스텝 여부. Y / N",
                 sleep: "실행 전 대기 시간(초).",
               }}
-              readOnly={editorReadOnly}
+              readOnly={false}
             />
           </div>
         </div>
@@ -558,7 +554,6 @@ const ScenarioExcelSection = ({
     </div>
   );
 };
-
 // ──────────────────────────────────────────────
 // 메인 페이지
 // ──────────────────────────────────────────────
@@ -724,20 +719,6 @@ const ScenarioTestDetailPage = () => {
               </span>
               새로고침
             </button>
-            {/*<button*/}
-            {/*  onClick={handleRunTest}*/}
-            {/*  disabled={isExecuting || data?.running}*/}
-            {/*  className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white rounded-lg shadow-sm ${*/}
-            {/*    isExecuting || data?.running*/}
-            {/*      ? "bg-blue-400 cursor-not-allowed"*/}
-            {/*      : "bg-blue-500 hover:bg-blue-600"*/}
-            {/*  }`}*/}
-            {/*>*/}
-            {/*  <span className="material-symbols-outlined text-lg">*/}
-            {/*    play_arrow*/}
-            {/*  </span>*/}
-            {/*  {isExecuting || data?.running ? "실행 중..." : "즉시 실행"}*/}
-            {/*</button>*/}
           </>
         }
       />

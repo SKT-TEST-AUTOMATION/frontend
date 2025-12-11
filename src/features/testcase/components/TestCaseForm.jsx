@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import TestCaseExcelTab from "./TestCaseExcelTab";
 import TestCaseInfoTab from "./TestCaseInfoTab";
-import NewTestCaseExcelTab from './NewTestCaseExcelTab.jsx';
+import TestCaseStepTab from './TestCaseStepTab.jsx';
 
 /**
  * 공용 폼
@@ -99,7 +99,7 @@ export default function TestCaseForm({
       ) : (
         <div className="p-6">
           {/*<TestCaseExcelTab form={form} testCaseId={testCaseId} excelFileName={excelFileName ?? form?.excelFileName} readOnly={readOnly} />*/}
-          <NewTestCaseExcelTab form={form} testCaseId={testCaseId} excelFileName={excelFileName ?? form?.excelFileName} readOnly={readOnly} />
+          <TestCaseStepTab form={form} testCaseId={testCaseId} excelFileName={excelFileName ?? form?.excelFileName} readOnly={readOnly} />
         </div>
       )}
     </div>

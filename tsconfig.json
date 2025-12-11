@@ -12,6 +12,9 @@
     "allowJs": true,   // .js/.jsx 파일 import 허용
     "checkJs": false,  // JS까지 타입 체크하고 싶으면 true
 
+    "declaration": true,
+    "emitDeclarationOnly": true,
+
     "strict": true,
     "isolatedModules": true,
     "resolveJsonModule": true,

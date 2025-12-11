@@ -146,12 +146,13 @@ export const getColumnHeader = (index) => {
   return columnName;
 };
 
-// 데이터를 직사각형 형태로 정규화 (모든 행의 길이를 동일하게)
+// 데이터 정규화 (모든 행의 길이를 동일하게)
 export const normalizeSheetData = (data) => {
-  if (!data || data.length === 0) return [[""]];
+  if (!data || data.length === 0) return [[""]]; // 빈 데이터 일 경우, 빈 셀 반환
 
-  const maxCols = data.reduce((max, row) => Math.max(max, row.length), 0);
+  const maxCols = data.reduce((max, row) => Math.max(max, row.length), 0); // 가장 긴 행의 컬럼 개수 저장
 
+  // 모든 행의 컬럼 개수가 동일하도록 열 개수를 맞춤
   return data.map((row) => {
     const newRow = [...row];
     while (newRow.length < maxCols) {
@@ -162,6 +163,8 @@ export const normalizeSheetData = (data) => {
 };
 
 // 파일 읽기: Excel → { sheets, sheetNames }
+// sheets : { [sheetName: string]: string[][]; };
+// sheetNames: string[];
 export const readFile = (file) => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
