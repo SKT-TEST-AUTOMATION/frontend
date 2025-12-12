@@ -6,10 +6,45 @@ export const api = axios.create({
 });
 
 export function toErrorMessage(err, fallback = "요청에 실패했습니다.") {
+  // axios cancel
   if (err?.code === "ERR_CANCELED") return "요청이 취소되었습니다.";
-  if (err?.response?.data?.error?.message) return err.response.data.error.message;
-  if (err?.response?.status) return `${err.response.status} ${err.response.statusText}`;
-  return err?.message || fallback;
+
+  // 1) axios 응답 데이터 우선
+  let payload = err?.response?.data ?? err?.data ?? err;
+
+  // 2) Error 객체의 message가 "Error: {...json...}" 형태인 경우
+  if (payload instanceof Error && typeof payload.message === "string") {
+    payload = payload.message;
+  }
+
+  // 3) 문자열이면 JSON 파싱 시도 ("Error: " 접두사 제거 포함)
+  if (typeof payload === "string") {
+    const s = payload.trim();
+    const jsonLike = s.startsWith("Error:") ? s.replace(/^Error:\s*/, "") : s;
+    try {
+      payload = JSON.parse(jsonLike);
+    } catch {
+      // JSON 아니면 그냥 문자열을 메시지로 사용
+      return s || fallback;
+    }
+  }
+
+  // 4) 메시지 후보들(프로젝트/서버 포맷별로 확장 가능)
+  const msg =
+    payload?.error?.message ||
+    payload?.message ||
+    err?.error?.message ||
+    err?.message ||
+    err?.response?.data?.error?.message;
+
+  if (msg) return msg;
+
+  // 5) 상태코드 fallback
+  if (err?.response?.status) {
+    return `${err.response.status} ${err.response.statusText ?? ""}`.trim();
+  }
+
+  return fallback;
 }
 
 export function normalizePage(res) {
