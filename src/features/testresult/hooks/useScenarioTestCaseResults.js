@@ -3,14 +3,36 @@ import { useCallback, useState } from "react";
 import { toErrorMessage } from "../../../services/axios";
 import { getScenarioTestCaseResults } from "../../../services/runAPI";
 
-/**
- * Run별 TestCase 결과 + 확장 상태 관리 훅
- * - expandedId: 현재 펼쳐진 runId
- * - tcMap: { [runId]: { loading, error, rows } }
- */
 export function useScenarioTestCaseResults() {
   const [expandedId, setExpandedId] = useState(null);
   const [tcMap, setTcMap] = useState({});
+
+  const fetchRunCases = useCallback(async (runId) => {
+    setTcMap((prev) => ({
+      ...prev,
+      [runId]: { loading: true, error: null, rows: prev?.[runId]?.rows ?? [] },
+    }));
+
+    try {
+      const res = await getScenarioTestCaseResults(runId);
+      const rows = Array.isArray(res) ? res : res?.content || [];
+      setTcMap((prev) => ({
+        ...prev,
+        [runId]: { loading: false, error: null, rows },
+      }));
+      return rows;
+    } catch (err) {
+      setTcMap((prev) => ({
+        ...prev,
+        [runId]: {
+          loading: false,
+          error: toErrorMessage(err),
+          rows: [],
+        },
+      }));
+      throw err;
+    }
+  }, []);
 
   const toggleExpand = useCallback(
     async (runId) => {
@@ -18,39 +40,22 @@ export function useScenarioTestCaseResults() {
 
       // 펼칠 때 + 아직 데이터가 없을 때만 호출
       const cached = tcMap[runId];
-      if (cached || expandedId === runId) {
-        return;
-      }
+      if (cached || expandedId === runId) return;
 
-      setTcMap((prev) => ({
-        ...prev,
-        [runId]: { loading: true, error: null, rows: [] },
-      }));
-
-      try {
-        const res = await getScenarioTestCaseResults(runId);
-        const rows = Array.isArray(res) ? res : res?.content || [];
-        setTcMap((prev) => ({
-          ...prev,
-          [runId]: { loading: false, error: null, rows },
-        }));
-      } catch (err) {
-        setTcMap((prev) => ({
-          ...prev,
-          [runId]: {
-            loading: false,
-            error: toErrorMessage(err),
-            rows: [],
-          },
-        }));
-      }
+      await fetchRunCases(runId);
     },
-    [expandedId, tcMap]
+    [expandedId, tcMap, fetchRunCases]
   );
 
-  /**
-   * 외부에서 JIRA issueKey 등을 업데이트하기 위한 헬퍼
-   */
+  //  저장 후 “바로 반영”용: 해당 runId만 다시 조회
+  const refetchRunCases = useCallback(
+    async (runId) => {
+      if (!runId) return;
+      return fetchRunCases(runId);
+    },
+    [fetchRunCases]
+  );
+
   const updateTestCaseIssue = useCallback((runId, testCaseId, issueKey) => {
     setTcMap((prev) => {
       const block = prev[runId];
@@ -58,9 +63,7 @@ export function useScenarioTestCaseResults() {
 
       const nextRows = (block.rows || []).map((r) => {
         const rId = r?.testCaseId ?? r?.id;
-        if (rId === testCaseId) {
-          return { ...r, issueId: issueKey };
-        }
+        if (rId === testCaseId) return { ...r, issueId: issueKey };
         return r;
       });
 
@@ -75,6 +78,7 @@ export function useScenarioTestCaseResults() {
     expandedId,
     tcMap,
     toggleExpand,
+    refetchRunCases,
     updateTestCaseIssue,
   };
 }

@@ -251,14 +251,9 @@ export default function JiraIssueModal({
                       placeholder="실패 원인, 재현 단계, 기대 결과 등을 자세히 적어주세요."
                       className="w-full h-48 sm:h-64 px-4 py-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 dark:focus:ring-blue-900/30 focus:bg-white dark:focus:bg-gray-800 resize-none font-mono leading-relaxed"
                     />
-                    <div className="absolute bottom-3 right-3 pointer-events-none">
-                      <div className="bg-gray-100 dark:bg-gray-700 text-gray-500 text-[10px] px-2 py-1 rounded">
-                        Markdown 사용 가능
-                      </div>
-                    </div>
                   </div>
                   <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                    템플릿에 실행/케이스/결과/로그가 자동 포함됩니다. 필요 시 내용을 편집하세요.
+                    템플릿에 실행/케이스/결과가 자동 포함됩니다. 필요 시 내용을 편집하세요.
                   </p>
                 </div>
 
@@ -274,11 +269,11 @@ export default function JiraIssueModal({
                         onChange={(e) => onChange("priority", e.target.value)}
                         className="w-full appearance-none px-4 py-2.5 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 dark:focus:ring-blue-900/30"
                       >
-                        <option value="Blocker">🔴 Blocker</option>
-                        <option value="Critical">🟠 Critical</option>
-                        <option value="Major">🟡 Major</option>
-                        <option value="Minor">🟢 Minor</option>
-                        <option value="Trivial">⚪ Trivial</option>
+                        <option value="Blocker">Blocker</option>
+                        <option value="Critical">Critical</option>
+                        <option value="Major">Major</option>
+                        <option value="Minor">Minor</option>
+                        <option value="Trivial">Trivial</option>
                       </select>
                       <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
                         <svg
@@ -335,10 +330,10 @@ export default function JiraIssueModal({
                     <div className="flex-1">
                       <div className="text-sm font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">
                         <IconImage className="w-4 h-4 text-gray-500" />
-                        스크린샷 및 로그 첨부
+                        스크린샷 첨부
                       </div>
                       <div className="text-xs text-gray-500 dark:text-gray-400">
-                        실행 시점의 스크린샷과 로그 파일을 자동으로 이슈에 첨부합니다.
+                        실행 시점의 스크린샷을 자동으로 이슈에 첨부합니다.
                       </div>
                     </div>
                   </label>

@@ -19,6 +19,7 @@ import TestScheduleListPage from "./features/runs/pages/TestScheduleListPage";
 import TestScheduleDetailPage from './features/runs/pages/TestScheduleDetailPage.jsx';
 import ScenarioTestDetailPage from './features/runs/pages/ScenarioTestDetailPage.jsx';
 import TestResultDetailPage from './features/testresult/pages/TestResultDetailPage.jsx';
+import AppRegistryPage from './features/apps/pages/AppRegistryPage.jsx';
 
 export const routes = [
   { path: "/", element: <LandingPage /> },
@@ -57,7 +58,10 @@ export const routes = [
           { path : ":scenarioTestRunId/detail", element: <TestResultDetailPage /> },
         ]},
       // { path: "results", element: <TestResultListPage /> },
-      { path: "registry/devices", element: <DeviceFarmPage /> },
+      { path: "registry", children: [
+          { path: "devices", element: <DeviceFarmPage /> },
+          { path : "apps", element: <AppRegistryPage /> },
+        ]},
       { path: "*", element: <NotFoundPage /> },
     ],
   },

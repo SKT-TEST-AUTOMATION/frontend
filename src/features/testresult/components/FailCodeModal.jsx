@@ -1,25 +1,47 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { getTestFailCodes } from "../../../services/metaAPI";
 import { toErrorMessage } from "../../../services/axios";
+import { useToast } from '../../../shared/hooks/useToast.js';
 
 export default function FailCodeModal({
                                         open,
                                         onClose,
                                         onSave,
                                         currentFailCode,
+                                        currentFailComment,
                                         targetInfo,
                                       }) {
+  const {showSuccess, showError} = useToast();
+
   const [selectedCode, setSelectedCode] = useState(null);
+  const [failComment, setFailComment] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+
   const [failCodes, setFailCodes] = useState([]);
   const [loadingCodes, setLoadingCodes] = useState(false);
   const [loadError, setLoadError] = useState("");
 
-  // 모달 열릴 때마다 현재 코드 + 코드 목록 로딩
+  //  변경 여부(코드/코멘트 둘 중 하나라도 달라지면 저장 활성화)
+  const isDirty = useMemo(() => {
+    const a = (selectedCode ?? "") !== (currentFailCode ?? "");
+    const b = (failComment ?? "") !== (currentFailComment ?? "");
+    return a || b;
+  }, [selectedCode, currentFailCode, failComment, currentFailComment]);
+
+  // 모달 열릴 때마다 현재 코드 + 현재 코멘트 + 코드 목록 로딩
   useEffect(() => {
+    console.log(currentFailCode);
+
+    console.log(currentFailComment);
     if (!open) return;
 
-    setSelectedCode(currentFailCode);
+    setSelectedCode(currentFailCode ?? null);
+    setFailComment(
+      (currentFailComment ??
+        targetInfo?.failComment ??
+        "") + ""
+    );
+
     setLoadError("");
     setLoadingCodes(true);
 
@@ -38,17 +60,19 @@ export default function FailCodeModal({
       .finally(() => {
         setLoadingCodes(false);
       });
-  }, [open, currentFailCode]);
+  }, [open, currentFailCode, currentFailComment, targetInfo?.failComment]);
 
   const handleSave = async () => {
     if (!selectedCode) return;
+
+    const trimmed = (failComment ?? "").trim();
+
     setIsSaving(true);
     try {
-      await onSave(selectedCode);
-      onClose();
-    } catch (e) {
-      console.error("Failed to update fail code", e);
-      // TODO: Toast 등으로 사용자 알림 연동
+      await onSave({
+        testFailCode: selectedCode,
+        failComment: trimmed === "" ? null : trimmed,
+      });
     } finally {
       setIsSaving(false);
     }
@@ -56,8 +80,7 @@ export default function FailCodeModal({
 
   if (!open) return null;
 
-  const selectedMeta =
-    failCodes.find((c) => c.code === selectedCode) ?? null;
+  const selectedMeta = failCodes.find((c) => c.code === selectedCode) ?? null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
@@ -73,7 +96,7 @@ export default function FailCodeModal({
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between bg-white dark:bg-gray-800 shrink-0">
           <div>
             <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">
-              실패 원인 분석 (Fail Code)
+              실패 코드 확인
             </h3>
             {targetInfo && (
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -104,22 +127,18 @@ export default function FailCodeModal({
               <div className="mt-2 flex items-center gap-3">
                 {selectedCode ? (
                   <>
-                    {/* 코드 (F01 / D01 ...) */}
                     <span className="inline-flex items-center justify-center h-8 px-3 rounded bg-blue-600 text-white text-sm font-bold shadow-sm">
                       {selectedCode}
                     </span>
                     <div className="flex flex-col">
-                      {/* 한글명 */}
                       <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                         {selectedMeta?.name ?? "알 수 없는 코드"}
                       </span>
-                      {/* detailCode (F01_FLOW_POPUP ...) */}
                       {selectedMeta?.detailCode && (
                         <span className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 font-mono">
                           {selectedMeta.detailCode}
                         </span>
                       )}
-                      {/* 설명 */}
                       {selectedMeta?.description && (
                         <span className="text-xs text-gray-600 dark:text-gray-400 mt-1">
                           {selectedMeta.description}
@@ -177,7 +196,6 @@ export default function FailCodeModal({
                             : "hover:bg-gray-50 dark:hover:bg-gray-700/30"
                         }`}
                       >
-                        {/* 코드 (F01 / D01 ...) */}
                         <td className="px-4 py-3 text-center align-top">
                             <span
                               className={`inline-block px-2 py-1 rounded text-xs font-bold ${
@@ -190,7 +208,6 @@ export default function FailCodeModal({
                             </span>
                         </td>
 
-                        {/* 이름 + detailCode */}
                         <td className="px-4 py-3 align-top">
                           <div className="flex flex-col gap-0.5">
                               <span
@@ -210,7 +227,6 @@ export default function FailCodeModal({
                           </div>
                         </td>
 
-                        {/* 설명 */}
                         <td className="px-4 py-3 text-gray-600 dark:text-gray-400 leading-relaxed align-top">
                           {failDef.description}
                         </td>
@@ -220,6 +236,37 @@ export default function FailCodeModal({
                   </tbody>
                 </table>
               )}
+            </div>
+
+            {/* 실패 코멘트 입력 */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
+              <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                <div className="flex flex-col">
+                  <span className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
+                    원인 총평
+                  </span>
+                  <span className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                    실패 원인/재현 조건/조치 사항 등을 간단히 기록해두세요.
+                  </span>
+                </div>
+                <span className="text-[11px] text-gray-400 dark:text-gray-500">
+                  {(failComment?.length ?? 0)}/500
+                </span>
+              </div>
+
+              <div className="p-4">
+                <textarea
+                  value={failComment}
+                  onChange={(e) => {
+                    const v = e.target.value ?? "";
+                    // 간단한 길이 제한
+                    if (v.length <= 500) setFailComment(v);
+                  }}
+                  rows={4}
+                  placeholder="예) 신규 빌드에서 미션탭 진입 시 팝업 노출로 플로우가 변경됨. selector 수정 필요."
+                  className="w-full resize-y rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm text-gray-800 dark:text-gray-100 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -234,15 +281,9 @@ export default function FailCodeModal({
           </button>
           <button
             onClick={handleSave}
-            disabled={
-              isSaving ||
-              !selectedCode ||
-              selectedCode === currentFailCode
-            }
+            disabled={isSaving || !selectedCode || !isDirty}
             className={`px-4 py-2 text-sm font-medium text-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500 transition-colors ${
-              isSaving ||
-              !selectedCode ||
-              selectedCode === currentFailCode
+              isSaving || !selectedCode || !isDirty
                 ? "bg-blue-400 cursor-not-allowed opacity-70"
                 : "bg-blue-600 hover:bg-blue-700"
             }`}
