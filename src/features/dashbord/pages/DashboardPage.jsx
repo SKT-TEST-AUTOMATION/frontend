@@ -1,10 +1,12 @@
-import React from "react";
+import React, { useCallback } from "react";
 import PageHeader from "../../../shared/components/PageHeader";
 import TodaySummaryRow from "../components/TodaySummaryRow";
 import { useDashboardData } from "../hooks/useDashboardData";
 import TodaySchedulePanel from "../components/TodaySchedulePanel";
-import TodaySchedulePanelSkeleton from '../components/TodaySchedulePanelSkeleton.jsx';
-import LiveIndicator from '../../../shared/components/LiveIndicator.jsx';
+import TodaySchedulePanelSkeleton from "../components/TodaySchedulePanelSkeleton.jsx";
+import LiveIndicator from "../../../shared/components/LiveIndicator.jsx";
+import Heatmap from "../components/HeatMap.jsx";
+import { useHeatmapData } from "../hooks/useHeatmapData.js";
 
 function DashboardPage() {
   const {
@@ -14,54 +16,42 @@ function DashboardPage() {
     todayRuns,
     activeRuns,
     todaySchedules,
-    refresh,
+    refresh: refreshMain,
   } = useDashboardData();
 
-  // 초기 로딩 이전: "-" / 로딩이 끝난 후: 숫자(0 포함)
+  const heat = useHeatmapData({ autoLoad: true });
+
+  const refreshAll = useCallback(() => {
+    refreshMain();
+    heat.load();
+  }, [refreshMain, heat]);
+
   const toSummaryValue = (n) => {
-    if (!initialized) return "-";  // 아직 서버 응답을 한 번도 못 받음
-    if (n == null) return "-";     // 이론상 null일 경우 (혹시 대비)
-    return n;                      // 0도 그대로 0으로 표시
+    if (!initialized) return "-";
+    if (n == null) return "-";
+    return n;
   };
 
   const runningValue = toSummaryValue(summary.runningCount);
-  const isRunningActive = typeof runningValue === "number" && Number.isFinite(runningValue) && runningValue > 0;
+  const isRunningActive =
+    typeof runningValue === "number" && Number.isFinite(runningValue) && runningValue > 0;
 
   const summaryItems = [
-    {
-      key: "today-completed",
-      title: "오늘 완료된 테스트",
-      value: toSummaryValue(summary.completedCount),
-      badgeLabel: "오늘 기준",
-      badgeVariant: "primary",
-    },
-    {
-      key: "today-failed",
-      title: "오늘 실패한 테스트",
-      value: toSummaryValue(summary.failedCount),
-      badgeLabel: "오늘 발생한 실패 횟수",
-      badgeVariant: "danger",
-    },
+    { key: "today-completed", title: "오늘 완료된 테스트", value: toSummaryValue(summary.completedCount), badgeLabel: "오늘 기준", badgeVariant: "primary" },
+    { key: "today-failed", title: "오늘 실패한 테스트", value: toSummaryValue(summary.failedCount), badgeLabel: "오늘 발생한 실패 횟수", badgeVariant: "danger" },
     {
       key: "running",
-      // title을 JSX로 넘김
       title: (
         <span className="inline-flex items-center gap-1.5">
-        <LiveIndicator active={isRunningActive} />
-        <span>현재 실행중 테스트</span>
-      </span>
+          <LiveIndicator active={isRunningActive} />
+          <span>현재 실행중 테스트</span>
+        </span>
       ),
       value: toSummaryValue(summary.runningCount),
       badgeLabel: "실시간 기준",
       badgeVariant: "success",
     },
-    {
-      key: "queued",
-      title: "오늘 대기 중 테스트",
-      value: toSummaryValue(summary.queuedCount),
-      badgeLabel: "오늘 기준",
-      badgeVariant: "warning",
-    },
+    { key: "queued", title: "오늘 대기 중 테스트", value: toSummaryValue(summary.queuedCount), badgeLabel: "오늘 기준", badgeVariant: "warning" },
   ];
 
   return (
@@ -72,7 +62,7 @@ function DashboardPage() {
         actions={
           <button
             type="button"
-            onClick={refresh}
+            onClick={refreshAll}
             className="rounded-lg border border-slate-200 px-3 py-1 text-xs text-slate-600 hover:bg-slate-50"
           >
             새로고침
@@ -84,14 +74,35 @@ function DashboardPage() {
         <TodaySummaryRow items={summaryItems} />
       </div>
 
+      <div className="mt-8 mb-8">
+        <Heatmap
+          loading={heat.loading}
+          initialized={heat.initialized}
+          errorMessage={heat.errorMessage}
+          heatmap={heat.heatmap}
+          startDate={heat.startDate}
+          endDate={heat.endDate}
+          selectedTestIds={heat.selectedTestIds}
+          onChangeRange={(s, e) => heat.setRange(s, e)}
+          onChangeTestIds={(ids) => heat.setTestFilter(ids)}
+          onToggleTestId={(id) => heat.toggleTestId(id)}
+          onToggleAllTests={() => heat.toggleAllTests()}
+          onQuickLast7={() => heat.setLast7Days()}
+          onQuickLast30={() => heat.setLast30Days()}
+          selectedCell={heat.selectedCell}
+          onCellClick={(cell) => heat.setSelectedCell(cell)}
+          onReload={() => heat.load()}
+        />
+      </div>
+
       <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1.1fr)]">
-          <TodaySchedulePanelSkeleton />
-          <TodaySchedulePanel
-            loading={loading}
-            todayRuns={todayRuns}
-            activeRuns={activeRuns}
-            todaySchedules={todaySchedules}
-          />
+        <TodaySchedulePanelSkeleton />
+        <TodaySchedulePanel
+          loading={loading}
+          todayRuns={todayRuns}
+          activeRuns={activeRuns}
+          todaySchedules={todaySchedules}
+        />
       </div>
     </div>
   );
