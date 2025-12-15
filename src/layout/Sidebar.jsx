@@ -57,6 +57,7 @@ const buildDefaultNav = () => ({
   ],
   registry: [
     { label: '디바이스 관리', href: '/registry/devices' },
+    { label: '앱 관리', href: '/registry/apps' },
   ],
 });
 
@@ -65,7 +66,7 @@ const SECTION_META = {
   testCase:  { title: '테스트 케이스 관리', icon: 'assignment' },
   run:       { title: '테스트 실행 관리',   icon: 'play_circle' },
   runResult: { title: '테스트 결과 관리',   icon: 'analytics' },
-  registry:  { title: '테스트 레지스트리',  icon: 'devices' },
+  registry:  { title: '테스트 레지스트리',  icon: 'devices' }
 };
 
 export default function Sidebar({

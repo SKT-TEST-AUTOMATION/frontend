@@ -26,3 +26,11 @@ export async function updateScenarioTestRunComment(id, payload) {
   const res = await api.put(`scenarios/tests/results/${id}/comment`, payload);
   return res?.data?.data ?? res?.data;
 }
+
+// 테스트 케이스 실패 결과 코드 & 코멘트 수정
+export async function updateTestCaseResultFailMeta(id, { testFailCode, failComment }) {
+  const res = await api.put(`scenarios/tests/results/testcases/${id}/fail-meta`,
+    { testFailCode, failComment }
+  );
+  return res?.data?.data ?? res?.data;
+}

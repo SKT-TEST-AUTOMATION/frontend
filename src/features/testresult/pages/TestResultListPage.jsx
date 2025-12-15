@@ -17,6 +17,9 @@ import TestCaseResultTable from "../components/TestCaseResultTable.jsx";
 import TestResultFilterBar from '../components/TestResultFilterBar.jsx';
 import FailCodeModal from '../components/FailCodeModal.jsx';
 import { useNavigate } from 'react-router-dom';
+import { updateTestCaseResultFailMeta } from '../../../services/testAPI.js';
+import { useToast } from '../../../shared/hooks/useToast.js';
+import { toErrorMessage } from '../../../services/axios.js';
 
 // TestResultListPage.jsx 상단 부분
 const DEFAULT_FILTER = {
@@ -29,6 +32,7 @@ const DEFAULT_FILTER = {
 
 export default function TestResultListPage() {
   const navigate = useNavigate();
+  const {showSuccess, showError} = useToast();
   const [filterForm, setFilterForm] = useState(DEFAULT_FILTER);
 
   const [periodError, setPeriodError] = useState("");
@@ -78,7 +82,7 @@ export default function TestResultListPage() {
   };
 
   // 2) Run별 테스트케이스 결과 + 확장 상태
-  const { expandedId, tcMap, toggleExpand, updateTestCaseIssue } =
+  const { expandedId, tcMap, toggleExpand, updateTestCaseIssue, refetchRunCases } =
     useScenarioTestCaseResults();
 
   // 3) JIRA 모달 상태/동작 (tcMap 업데이트는 이 훅에서 직접 하지 않고 상위에 위임)
@@ -105,20 +109,23 @@ export default function TestResultListPage() {
   const [failCodeModal, setFailCodeModal] = useState({
     open: false,
     currentFailCode: null,
-    targetInfo : null,
-    payload : null,
+    currentFailComment: "",
+    targetInfo: null,
+    payload: null,
   })
 
   // 실패 코드 모달 열기 핸들러
   const handleOpenFailCodeModal = (payload) => {
+    console.log(payload);
     setFailCodeModal({
       open: true,
-      currentFailCode: payload.failCode ?? null,
+      currentFailCode: payload?.failCode ?? null,
+      currentFailComment: payload?.failComment ?? "",
       targetInfo: {
-        caseCode: payload.caseCode,
-        caseName: payload.caseName,
+        caseCode: payload?.caseCode,
+        caseName: payload?.caseName,
       },
-      payload, // 나중에 저장 API 호출 시 사용
+      payload, // 저장 시 사용
     });
   };
 
@@ -126,34 +133,35 @@ export default function TestResultListPage() {
     setFailCodeModal({
       open: false,
       currentFailCode: null,
+      currentFailComment: "",
       targetInfo: null,
       payload: null,
     });
   };
 
-  // 실패 코드 저장 핸들러 (백엔드 업데이트 API는 아직 없으니 TODO로 표시)
-  const handleSaveFailCode = async (newCode) => {
+  // 실패 코드 저장 핸들러
+  const handleSaveFailMeta = async ({ testFailCode, failComment }) => {
     const { payload } = failCodeModal;
     if (!payload) return;
 
-    const { runId, testCaseRow } = payload;
+    const { testCaseRow } = payload;
+    const testCaseResultId = testCaseRow?.id;
 
-    // TODO: 여기에서 백엔드에 실패 코드 업데이트 API 호출
-    // 예시 (실제 API path/파라미터는 구현에 맞게 수정 필요):
-    // await updateTestCaseFailCode({
-    //   runId,
-    //   testCaseResultId: testCaseRow.id,
-    //   failCode: newCode,
-    // });
-    //
-    // 그리고 tcMap을 갱신하거나, useScenarioTestCaseResults 훅에
-    // updateTestCaseFailCode 같은 updater를 만들어 호출하면 됩니다.
+    // eslint-disable-next-line no-useless-catch
+    try {
+      await updateTestCaseResultFailMeta(testCaseResultId, {
+        testFailCode,
+        failComment
+      })
 
-    console.log("save failCode", {
-      runId,
-      testCaseRow,
-      newCode,
-    });
+      showSuccess("변경 사항이 저장되었습니다.");
+      await refetchRunCases(expandedId);
+
+      handleCloseFailCodeModal();
+
+    } catch (e) {
+      showError(toErrorMessage(e));
+    }
   };
 
   const handleRowClick = (id) => {
@@ -425,7 +433,6 @@ export default function TestResultListPage() {
           )}
         </div>
 
-
         {/* 페이지네이션 */}
         <PaginationBar
           page={page}
@@ -470,9 +477,10 @@ export default function TestResultListPage() {
       <FailCodeModal
         open={failCodeModal.open}
         currentFailCode={failCodeModal.currentFailCode}
+        currentFailComment={failCodeModal.currentFailComment}
         targetInfo={failCodeModal.targetInfo}
         onClose={handleCloseFailCodeModal}
-        onSave={handleSaveFailCode}
+        onSave={handleSaveFailMeta}
       />
     </>
   );
