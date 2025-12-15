@@ -10,6 +10,12 @@ export default {
           400:'#6aa3c1',500:'#3a7ca5',600:'#326d92',700:'#2a5e7e',
           800:'#234e68',900:'#1b3c50', DEFAULT:'#3a7ca5'
         },
+        status: {
+          pass: "#34D399",       // emerald-400
+          fail: "#FB7185",       // rose-400
+          regression: "#FBBF24", // amber-400
+          empty: "#eef1f5",
+        },
       },
     },
   },

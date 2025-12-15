@@ -17,3 +17,17 @@ export async function getTodaySchedulesToRun(id, signal) {
   const res = await api.get(`dashboards/today/runs/schedules`, { signal });
   return res?.data?.data ?? res?.data;
 }
+
+// 일별 테스트 실행 히트맵
+// params: { startDate: "YYYY-MM-DD", endDate: "YYYY-MM-DD", scenarioTestIds?: number[] }
+export async function getScenarioTestHeatMap(params, signal) {
+  const res = await api.get(`dashboards/tests/heatmap`, {
+    params,
+    paramsSerializer: {
+      // scenarioTestIds를 ?scenarioTestIds=1&scenarioTestIds=2 형태로 보냄
+      indexes: null,
+    },
+    signal,
+  });
+  return res?.data?.data ?? res?.data;
+}
