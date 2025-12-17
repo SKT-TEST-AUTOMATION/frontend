@@ -1,5 +1,23 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Calendar, Filter, CheckSquare, Square, ChevronDown, RefreshCw } from "lucide-react";
+
+function useElementWidth(ref) {
+  const [width, setWidth] = useState(0);
+
+  useEffect(() => {
+    if (!ref.current) return;
+
+    const el = ref.current;
+    const ro = new ResizeObserver((entries) => {
+      const w = Math.floor(entries[0]?.contentRect?.width ?? 0);
+      setWidth((prev) => (prev === w ? prev : w));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref]);
+
+  return width;
+}
 
 export default function Heatmap({
                                   loading = false,
@@ -10,12 +28,14 @@ export default function Heatmap({
                                   startDate,
                                   endDate,
 
-                                  selectedTestIds,
+                                  // dropdown 옵션(사라지지 않게 유지)
+                                  testOptions = [],
+
+                                  // 체크 상태
+                                  selectedTestIds = [],
 
                                   onChangeRange,
                                   onChangeTestIds,
-                                  onToggleTestId,
-                                  onToggleAllTests,
                                   onQuickLast7,
                                   onQuickLast30,
                                   onReload,
@@ -25,6 +45,10 @@ export default function Heatmap({
                                 }) {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const filterRef = useRef(null);
+
+  // grid 폭 측정용
+  const gridWrapRef = useRef(null);
+  const wrapWidth = useElementWidth(gridWrapRef);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -37,44 +61,32 @@ export default function Heatmap({
   }, []);
 
   const allDates = heatmap?.dates ?? [];
-  const allTests = heatmap?.tests ?? [];
+  const allRows = heatmap?.tests ?? [];
 
   const filteredDates = useMemo(() => {
     if (!startDate || !endDate) return allDates;
     return allDates.filter((d) => d >= startDate && d <= endDate);
   }, [allDates, startDate, endDate]);
 
-  const visibleTests = useMemo(() => {
+  // 화면에 보여줄 row는 "응답 rows"를 기준으로 하되, 사용자가 선택한 것만 표시
+  const visibleRows = useMemo(() => {
     const ids = selectedTestIds ?? [];
-    return allTests.filter((t) => ids.includes(t.testId));
-  }, [allTests, selectedTestIds]);
+    if (ids.length === 0) return [];
+    const idSet = new Set(ids);
+    return allRows.filter((r) => idSet.has(r.scenarioTestId));
+  }, [allRows, selectedTestIds]);
 
-  const toggleTest = (id) => {
-    if (onToggleTestId) return onToggleTestId(id);
+  const toggleTest = useCallback((id) => {
     const prev = selectedTestIds ?? [];
     const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
     onChangeTestIds(next);
-  };
+  }, [selectedTestIds, onChangeTestIds]);
 
-  const toggleAll = () => {
-    if (onToggleAllTests) return onToggleAllTests();
-    const all = allTests.map((t) => t.testId);
-    onChangeTestIds((selectedTestIds?.length ?? 0) === all.length ? [] : all);
-  };
-
-  const getCellColor = (status, isSelected) => {
-    const border = isSelected ? "ring-2 ring-blue-600 z-1" : "hover:opacity-80";
-    switch (status) {
-      case "REGRESSION":
-        return `bg-status-regression text-yellow-900 ${border}`;
-      case "FAIL":
-        return `bg-status-fail text-white ${border}`;
-      case "PASS":
-        return `bg-status-pass text-white ${border}`;
-      default:
-        return `bg-status-empty ${border}`;
-    }
-  };
+  const toggleAll = useCallback(() => {
+    const all = (testOptions ?? []).map((t) => t.testId);
+    const isAll = (selectedTestIds?.length ?? 0) === all.length;
+    onChangeTestIds(isAll ? [] : all);
+  }, [testOptions, selectedTestIds, onChangeTestIds]);
 
   const fmtMD = (isoDate) => {
     if (!isoDate || isoDate.length < 10) return isoDate;
@@ -83,7 +95,64 @@ export default function Heatmap({
 
   const hasData = !!heatmap && (heatmap.tests?.length ?? 0) > 0;
 
+  // ─────────────────────────────────────────────────────────
+  // ✅ “기간 넓으면 최소 셀 크기 + 스크롤”, 좁으면 유연
+  // ─────────────────────────────────────────────────────────
+  const LABEL_COL_PX = 192; // w-48(대략)
+  const MIN_CELL_PX = 26;   // 최소 셀 크기 (정사각형 유지 구간)
+  const GAP_PX = 4;         // gap-1(대략 4px)
+  const colCount = filteredDates.length;
+
+  const { scrollMode, cellPx, innerMinWidth, gridColsStyle, rowHeightStyle } = useMemo(() => {
+    const safeCols = Math.max(1, colCount);
+    const available = Math.max(0, wrapWidth - LABEL_COL_PX);
+
+    // “최소 셀”로 몇 칼럼까지 들어갈 수 있는지(경계 깜빡임 방지용으로 이 기준이 안정적입니다)
+    const maxColsFit = Math.floor((available + GAP_PX) / (MIN_CELL_PX + GAP_PX));
+    const needScroll = safeCols > Math.max(1, maxColsFit);
+
+    if (needScroll) {
+      const minW =
+        LABEL_COL_PX +
+        safeCols * MIN_CELL_PX +
+        Math.max(0, safeCols - 1) * GAP_PX;
+
+      return {
+        scrollMode: true,
+        cellPx: MIN_CELL_PX,
+        innerMinWidth: minW,
+        gridColsStyle: { gridTemplateColumns: `repeat(${safeCols}, ${MIN_CELL_PX}px)` },
+        rowHeightStyle: { height: `${MIN_CELL_PX}px` }, // 정사각형 유지(세로=가로)
+      };
+    }
+
+    // 좁은 기간: 칼럼 수가 적으니 가로를 유연하게 채우고(정사각형 고집 X)
+    return {
+      scrollMode: false,
+      cellPx: null,
+      innerMinWidth: "100%",
+      gridColsStyle: { gridTemplateColumns: `repeat(${safeCols}, minmax(0, 1fr))` },
+      rowHeightStyle: { height: "32px" }, // 행 높이만 통일
+    };
+  }, [wrapWidth, colCount]);
+
+  const getCellClass = (status, isSelected) => {
+    const ring = isSelected ? "ring-2 ring-blue-600 z-1" : "";
+    switch (status) {
+      case "REGRESSION":
+        return `bg-status-regression text-yellow-900 ${ring}`;
+      case "FAIL":
+        return `bg-status-fail text-white ${ring}`;
+      case "PASS":
+        return `bg-status-pass text-white ${ring}`;
+      default:
+        return `bg-status-empty ${ring}`;
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────
   // 상태 UI
+  // ─────────────────────────────────────────────────────────
   if (!hasData && loading) {
     return (
       <div className="w-full bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
@@ -161,6 +230,7 @@ export default function Heatmap({
           <p className="text-xs text-slate-500 mt-1">일별 테스트 현황</p>
         </div>
 
+        {/* Controls */}
         <div className="flex flex-wrap items-center gap-3">
           {/* Legend */}
           <div className="flex gap-3 text-xs mr-4 border-r border-slate-200 pr-4 hidden lg:flex">
@@ -183,15 +253,15 @@ export default function Heatmap({
             <button
               type="button"
               onClick={() => setIsFilterOpen((v) => !v)}
-              className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${
-                isFilterOpen || (allTests.length !== (selectedTestIds?.length ?? 0))
+              className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+                isFilterOpen || (testOptions.length !== (selectedTestIds?.length ?? 0))
                   ? "bg-blue-50 text-blue-700 border-blue-200"
                   : "bg-slate-100 text-slate-600 border-slate-200 hover:bg-white"
               }`}
             >
               <Filter size={14} />
               <span>테스트 선택</span>
-              {allTests.length !== (selectedTestIds?.length ?? 0) && (
+              {testOptions.length !== (selectedTestIds?.length ?? 0) && (
                 <span className="ml-1 bg-blue-200 text-blue-800 text-[10px] px-1.5 rounded-full">
                   {selectedTestIds?.length ?? 0}
                 </span>
@@ -203,13 +273,17 @@ export default function Heatmap({
               <div className="absolute top-full left-0 mt-2 w-72 bg-white rounded-xl shadow-xl border border-slate-200 z-50 p-3">
                 <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-100">
                   <span className="text-xs font-bold text-slate-700">표시할 테스트 선택</span>
-                  <button type="button" onClick={toggleAll} className="text-[10px] text-blue-600 hover:underline">
-                    {(selectedTestIds?.length ?? 0) === allTests.length ? "모두 해제" : "모두 선택"}
+                  <button
+                    type="button"
+                    onClick={toggleAll}
+                    className="text-[10px] text-blue-600 hover:underline"
+                  >
+                    {(selectedTestIds?.length ?? 0) === testOptions.length ? "모두 해제" : "모두 선택"}
                   </button>
                 </div>
 
                 <div className="max-h-60 overflow-y-auto space-y-1">
-                  {allTests.map((t) => {
+                  {testOptions.map((t) => {
                     const isChecked = (selectedTestIds ?? []).includes(t.testId);
                     const label = t.testCode ? `${t.testCode} · ${t.testName}` : t.testName;
 
@@ -240,14 +314,23 @@ export default function Heatmap({
           <div className="h-6 w-px bg-slate-200 mx-1" />
 
           <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
-            <button type="button" onClick={() => onQuickLast7?.()} className="px-3 py-1 text-xs font-medium text-slate-600 hover:bg-white hover:shadow-sm rounded">
+            <button
+              type="button"
+              onClick={() => onQuickLast7?.()}
+              className="px-3 py-1 text-xs font-medium text-slate-600 hover:bg-white hover:shadow-sm rounded"
+            >
               7일
             </button>
-            <button type="button" onClick={() => onQuickLast30?.()} className="px-3 py-1 text-xs font-medium text-slate-600 hover:bg-white hover:shadow-sm rounded">
+            <button
+              type="button"
+              onClick={() => onQuickLast30?.()}
+              className="px-3 py-1 text-xs font-medium text-slate-600 hover:bg-white hover:shadow-sm rounded"
+            >
               30일
             </button>
           </div>
 
+          {/* 기간 설정 */}
           <div className="flex items-center gap-2 bg-slate-100 p-1 px-2 rounded-lg border border-slate-200 text-sm">
             <Calendar size={14} className="text-slate-500" />
             <input
@@ -278,22 +361,22 @@ export default function Heatmap({
         </div>
       </div>
 
-      <div className="overflow-x-auto pb-2">
-        <div style={{ minWidth: filteredDates.length * 24 + 200 }}>
+      {/* 이 래퍼 폭을 기준으로 "스크롤 모드"를 안정적으로 계산 */}
+      <div ref={gridWrapRef} className="overflow-x-auto pb-2">
+        <div style={{ minWidth: innerMinWidth }}>
           {/* Header */}
           <div className="flex mb-1">
             <div className="w-48 flex-shrink-0 p-2 text-xs font-semibold text-slate-500">
-              <div className="overflow-x-auto whitespace-nowrap pr-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                테스트 코드 / 명칭
-              </div>
+              테스트 코드 / 명칭
             </div>
 
-            <div
-              className="flex-1 grid gap-1"
-              style={{ gridTemplateColumns: `repeat(${filteredDates.length}, minmax(0, 1fr))` }}
-            >
+            <div className="flex-1 grid gap-1" style={gridColsStyle}>
               {filteredDates.map((d) => (
-                <div key={d} className="text-[10px] text-center text-slate-400 font-medium">
+                <div
+                  key={d}
+                  className="text-[10px] text-center text-slate-400 font-medium"
+                  style={scrollMode ? { width: `${cellPx}px` } : undefined}
+                >
                   {fmtMD(d)}
                 </div>
               ))}
@@ -301,31 +384,30 @@ export default function Heatmap({
           </div>
 
           {/* Rows */}
-          <div className="flex flex-col gap-1">
-            {visibleTests.length === 0 && (
+          <div className="flex flex-col gap-1 ml-0.5 mr-0.5">
+            {visibleRows.length === 0 && (
               <div className="py-10 text-center text-slate-400 text-sm border-2 border-dashed border-slate-100 rounded-lg">
                 선택된 테스트가 없습니다.
               </div>
             )}
 
-            {visibleTests.map((t) => {
+            {visibleRows.map((t) => {
               const byDate = new Map((t.days ?? []).map((x) => [x.date, x]));
 
               return (
-                <div key={t.testId} className="flex items-center h-8 group">
+                <div key={t.scenarioTestId} className="flex items-center">
                   <div className="w-48 flex-shrink-0 pr-4">
                     <div className="flex items-center gap-1 text-xs font-medium text-slate-700 overflow-x-auto whitespace-nowrap pr-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                       <span title={t.testName}>{t.testCode ?? t.testName}</span>
                       {t.testCode && (
-                        <span className="text-slate-400 font-normal text-[10px] shrink-0">{t.testName}</span>
+                        <span className="text-slate-400 font-normal text-[10px] shrink-0">
+                          {t.testName}
+                        </span>
                       )}
                     </div>
                   </div>
 
-                  <div
-                    className="flex-1 grid gap-[2px] h-full"
-                    style={{ gridTemplateColumns: `repeat(${filteredDates.length}, minmax(0, 1fr))` }}
-                  >
+                  <div className="flex-1 grid gap-1" style={gridColsStyle}>
                     {filteredDates.map((d) => {
                       const day = byDate.get(d) ?? {
                         date: d,
@@ -335,7 +417,9 @@ export default function Heatmap({
                         failTestCount: 0,
                       };
 
-                      const isSelected = selectedCell?.testId === t.testId && selectedCell?.date === d;
+                      const isSelected =
+                        selectedCell?.testId === (t.scenarioTestId ?? t.testId) &&
+                        selectedCell?.date === d;
 
                       return (
                         <button
@@ -343,7 +427,7 @@ export default function Heatmap({
                           type="button"
                           onClick={() =>
                             onCellClick({
-                              testId: t.testId,
+                              testId: t.scenarioTestId,
                               testCode: t.testCode ?? null,
                               testName: t.testName,
                               date: d,
@@ -354,16 +438,17 @@ export default function Heatmap({
                             })
                           }
                           className={`
-                            h-full w-full rounded-sm flex items-center justify-center text-[10px] font-bold transition-all relative
-                            ${getCellColor(day.status, isSelected)}
+                            w-full rounded-sm flex items-center justify-center text-[10px] font-bold relative
+                            ${getCellClass(day.status, isSelected)}
                           `}
+                          style={scrollMode ? { width: `${cellPx}px`, height: `${cellPx}px` } : rowHeightStyle}
                           title={`Date: ${d}\nStatus: ${day.status}\nTotal: ${day.totalTestCount}\nFail/Pass: ${day.failTestCount}/${day.passTestCount}`}
                         >
                           {day.status === "REGRESSION" && day.totalTestCount > 0 && (
-                            <div className="bg-white/90 px-1 py-0.5 rounded-[2px] shadow-sm flex items-center gap-[1px] leading-none transform scale-90">
-                              <span className="text-rose-400 font-extrabold">{day.failTestCount}</span>
-                              <span className="text-gray-500 text-[8px]">/</span>
-                              <span className="text-emerald-600 font-extrabold">{day.passTestCount}</span>
+                            <div className="bg-white/90 px-1 py-0.5 rounded-[2px] shadow-sm flex items-center gap-[1px] leading-none">
+                              <span className="text-rose-400 font-extrabold text-[8px]">{day.failTestCount}</span>
+                              <span className="text-gray-500 text-[6px]">/</span>
+                              <span className="text-emerald-600 font-extrabold text-[8px]">{day.passTestCount}</span>
                             </div>
                           )}
                         </button>
@@ -375,6 +460,7 @@ export default function Heatmap({
             })}
           </div>
 
+          {/* 하단 미세 로딩 표시 */}
           {hasData && loading && (
             <div className="mt-3 text-[11px] text-slate-400 flex items-center gap-2">
               <RefreshCw size={12} className="animate-spin" />

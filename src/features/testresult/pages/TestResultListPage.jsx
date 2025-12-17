@@ -116,7 +116,6 @@ export default function TestResultListPage() {
 
   // 실패 코드 모달 열기 핸들러
   const handleOpenFailCodeModal = (payload) => {
-    console.log(payload);
     setFailCodeModal({
       open: true,
       currentFailCode: payload?.failCode ?? null,

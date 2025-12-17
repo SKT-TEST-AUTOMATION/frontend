@@ -13,23 +13,7 @@ import LogStreamPanel from "../components/LogStreamPanel";
 import RunReportPanel from "../components/RunReportPanel";
 import { ReserveScheduleModal } from "../components/ReserveScheduleModal";
 import { generatePath, useNavigate } from 'react-router-dom';
-
-// bit0=MON..bit6=SUN 매핑용
-const DAY_OF_WEEK_ENUMS = [
-  "MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY","SATURDAY","SUNDAY"
-];
-
-// ---- shared helpers (componentized) ----
-const WEEKDAYS = [
-  { label: "월", bit: 0 },
-  { label: "화", bit: 1 },
-  { label: "수", bit: 2 },
-  { label: "목", bit: 3 },
-  { label: "금", bit: 4 },
-  { label: "토", bit: 5 },
-  { label: "일", bit: 6 },
-];
-function countBits(n) { let x = n >>> 0, c = 0; while (x) { c += x & 1; x >>>= 1; } return c; }
+import RunRequestModal from '../components/run-request/RunRequestModal.jsx';
 
 // Context for providing StatusBadge to row items (avoid referencing memo-wrapped component inside itself)
 const StatusBadgeContext = React.createContext(() => null);
@@ -235,7 +219,6 @@ export default function ScenarioTestListPage() {
   const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
   const [data, setData] = useState({
     content: [],
     totalElements: 0,
@@ -495,7 +478,8 @@ export default function ScenarioTestListPage() {
       </div>
       {
         pickerOpen && (
-          <DeviceSelectModal onClose={closePicker} onConfirm={handlePick} />
+          <RunRequestModal open={pickerOpen} onClose={closePicker} onSubmit={() => {console.log("실행 요청")}} />
+          // <DeviceSelectModal onClose={closePicker} onConfirm={handlePick} />
         )
       }
       {
