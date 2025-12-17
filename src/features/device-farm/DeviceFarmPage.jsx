@@ -310,16 +310,16 @@ export default function DeviceFarmPage() {
 
             {beLoading && registeredDevices.length === 0 ? (
               <div className="h-64 rounded-xl border border-dashed border-slate-300 bg-slate-50 flex items-center justify-center text-slate-400">
-                Loading registry...
+                로딩 중 . . .
               </div>
             ) : registeredDevices.length === 0 ? (
               <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-12 text-center">
                 <IconMobile className="mx-auto h-10 w-10 text-slate-300 mb-3" />
                 <h3 className="mt-2 text-sm font-semibold text-slate-900">
-                  No registered devices
+                  등록된 기기가 없습니다.
                 </h3>
                 <p className="mt-1 text-sm text-slate-500">
-                  New devices detected by Appium will appear below.
+                  아래는 Appium에 의해 감지된 디바이스 목록입니다.
                 </p>
               </div>
             ) : (
@@ -349,12 +349,12 @@ export default function DeviceFarmPage() {
 
             {dfLoading && unregisteredDevices.length === 0 ? (
               <div className="text-sm text-slate-500 italic">
-                Scanning for new devices...
+                디바이스 로딩 중 . . .
               </div>
             ) : unregisteredDevices.length === 0 ? (
               <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-8 text-center">
                 <p className="text-sm text-slate-500">
-                  All connected devices are registered.
+                  모든 연결된 기기가 등록되었습니다.
                 </p>
               </div>
             ) : (
@@ -369,7 +369,7 @@ export default function DeviceFarmPage() {
                           className="flex w-full items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100 hover:border-blue-300"
                         >
                           <IconPlus className="h-4 w-4" />
-                          Register Device
+                          기기 등록
                         </button>
                       }
                     />
