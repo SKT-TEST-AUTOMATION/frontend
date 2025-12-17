@@ -1,3 +1,4 @@
+// src/features/dashboard/pages/DashboardPage.jsx
 import React, { useCallback } from "react";
 import PageHeader from "../../../shared/components/PageHeader";
 import TodaySummaryRow from "../components/TodaySummaryRow";
@@ -5,8 +6,9 @@ import { useDashboardData } from "../hooks/useDashboardData";
 import TodaySchedulePanel from "../components/TodaySchedulePanel";
 import TodaySchedulePanelSkeleton from "../components/TodaySchedulePanelSkeleton.jsx";
 import LiveIndicator from "../../../shared/components/LiveIndicator.jsx";
-import Heatmap from "../components/HeatMap.jsx";
+import Heatmap from "../components/Heatmap.jsx";
 import { useHeatmapData } from "../hooks/useHeatmapData.js";
+import HeatmapDetailPanel from '../components/HeatmapDetailPanel.jsx';
 
 function DashboardPage() {
   const {
@@ -33,8 +35,7 @@ function DashboardPage() {
   };
 
   const runningValue = toSummaryValue(summary.runningCount);
-  const isRunningActive =
-    typeof runningValue === "number" && Number.isFinite(runningValue) && runningValue > 0;
+  const isRunningActive = typeof runningValue === "number" && Number.isFinite(runningValue) && runningValue > 0;
 
   const summaryItems = [
     { key: "today-completed", title: "오늘 완료된 테스트", value: toSummaryValue(summary.completedCount), badgeLabel: "오늘 기준", badgeVariant: "primary" },
@@ -82,16 +83,27 @@ function DashboardPage() {
           heatmap={heat.heatmap}
           startDate={heat.startDate}
           endDate={heat.endDate}
+
+          // ✅ 옵션 목록은 별도로 유지 (체크 해제해도 사라지지 않음)
+          testOptions={heat.testOptions}
+
+          // ✅ 체크 상태는 testIds로
           selectedTestIds={heat.selectedTestIds}
+
           onChangeRange={(s, e) => heat.setRange(s, e)}
           onChangeTestIds={(ids) => heat.setTestFilter(ids)}
-          onToggleTestId={(id) => heat.toggleTestId(id)}
-          onToggleAllTests={() => heat.toggleAllTests()}
           onQuickLast7={() => heat.setLast7Days()}
           onQuickLast30={() => heat.setLast30Days()}
           selectedCell={heat.selectedCell}
           onCellClick={(cell) => heat.setSelectedCell(cell)}
           onReload={() => heat.load()}
+        />
+        <HeatmapDetailPanel
+          selectedCell={heat.selectedCell}
+          loading={heat.detailLoading}
+          errorMessage={heat.detailErrorMessage}
+          runs={heat.detailRuns}
+          onReload={() => heat.reloadSelectedCellDetail()}
         />
       </div>
 

@@ -1,5 +1,5 @@
 // src/features/testresult/pages/TestResultDetailPage.jsx
-import React, { useMemo, useState, useCallback, useEffect } from 'react';
+import React, { useMemo, useState, useCallback, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 
 import PageHeader from "../../../shared/components/PageHeader";
@@ -17,25 +17,35 @@ import { useJiraIssueModal } from "../hooks/useJiraIssueModal";
 import { useScenarioTestRunDetail } from "../hooks/useScenarioTestRunDetail.js";
 import { useToast } from "../../../shared/hooks/useToast.js";
 import { toErrorMessage } from "../../../services/axios.js";
-import { updateScenarioTestRunComment } from "../../../services/testAPI.js";
+import {
+  updateScenarioTestRunComment,
+  updateTestCaseResultFailMeta,
+} from "../../../services/testAPI.js";
+
+function normalizeRunResult(value) {
+  if (value == null) return "N_A";
+  const s = String(value).toUpperCase();
+  if (s === "SUCCESS" || s === "OK") return "PASS";
+  if (s === "FAILURE" || s === "ERROR") return "FAIL";
+  return s;
+}
 
 /**
  * 테스트 실행 상세 페이지
- * URL 예시: /test-results/:scenarioTestRunId
+ * URL 예시: /results/:scenarioTestRunId/detail
  */
 export default function TestResultDetailPage() {
   const { scenarioTestRunId } = useParams();
+  const { showSuccess, showError } = useToast();
 
   const { run, testCases, setTestCases, loading, error } =
     useScenarioTestRunDetail(scenarioTestRunId);
-
-  const { showToast } = useToast();
 
   // JIRA 이슈 생성 시 testCases 배열을 갱신하기 위한 updater
   const updateTestCaseIssue = useCallback(
     ({ testCaseResultId, jiraIssueKey }) => {
       setTestCases((prev) =>
-        prev.map((tc) =>
+        (prev ?? []).map((tc) =>
           tc.id === testCaseResultId ? { ...tc, jiraIssueKey } : tc
         )
       );
@@ -67,6 +77,7 @@ export default function TestResultDetailPage() {
   const [failCodeModal, setFailCodeModal] = useState({
     open: false,
     currentFailCode: null,
+    currentFailComment: "",
     targetInfo: null,
     payload: null,
   });
@@ -74,10 +85,11 @@ export default function TestResultDetailPage() {
   const handleOpenFailCodeModal = (payload) => {
     setFailCodeModal({
       open: true,
-      currentFailCode: payload.failCode ?? null,
+      currentFailCode: payload?.failCode ?? null,
+      currentFailComment: payload?.failComment ?? "",
       targetInfo: {
-        caseCode: payload.caseCode,
-        caseName: payload.caseName,
+        caseCode: payload?.caseCode ?? "-",
+        caseName: payload?.caseName ?? "-",
       },
       payload,
     });
@@ -87,25 +99,52 @@ export default function TestResultDetailPage() {
     setFailCodeModal({
       open: false,
       currentFailCode: null,
+      currentFailComment: "",
       targetInfo: null,
       payload: null,
     });
   };
 
-  const handleSaveFailCode = async (newCode) => {
+  // 실패 코드 저장 핸들러 (refetchRunCases/expandedId 제거 + 로컬 상태 반영)
+  const handleSaveFailMeta = async ({ testFailCode, failComment }) => {
     const { payload } = failCodeModal;
     if (!payload) return;
 
-    const { runId: payloadRunId, testCaseRow } = payload;
+    const testCaseResultId = payload?.testCaseRow?.id;
+    if (!testCaseResultId) return;
 
-    // TODO: 실패 코드 업데이트 API 호출 (백엔드 구현 후 연결)
-    console.log("save failCode", {
-      payloadRunId,
-      testCaseRow,
-      newCode,
-    });
+    try {
+      await updateTestCaseResultFailMeta(testCaseResultId, {
+        testFailCode,
+        failComment,
+      });
 
-    handleCloseFailCodeModal();
+      // 현재 상세 페이지의 testCases를 로컬 업데이트로 반영
+      setTestCases((prev) =>
+        (prev ?? []).map((tc) => {
+          if (tc?.id !== testCaseResultId) return tc;
+
+          // 서버 DTO 형태가 흔들릴 수 있으므로, 최소한 TestCaseResultTable이 쓰는 필드를 맞춰줍니다.
+          const nextFailCode =
+            testFailCode == null
+              ? null
+              : typeof testFailCode === "string"
+                ? { code: testFailCode }
+                : testFailCode;
+
+          return {
+            ...tc,
+            testFailCode: nextFailCode,
+            failComment: failComment ?? "",
+          };
+        })
+      );
+
+      showSuccess("변경 사항이 저장되었습니다.");
+      handleCloseFailCodeModal();
+    } catch (e) {
+      showError(toErrorMessage(e));
+    }
   };
 
   // TestCaseResultTable에서 기대하는 block 형태 어댑터
@@ -135,25 +174,21 @@ export default function TestResultDetailPage() {
 
   const start = run?.startTime;
   const end = run?.endTime;
-  const runResult = run?.runResult ?? "N_A";
+  const runResultRaw = run?.runResult ?? "N_A";
+  const runResult = normalizeRunResult(runResultRaw);
   const errorMessage = run?.errorMessage;
   const resultLog = run?.resultLog;
   const runTriggerType = run?.runTriggerType ?? "-";
 
   // 테스트케이스 단위 통계
   const tcStats = useMemo(() => {
-    const total = testCases?.length ?? 0;
+    const list = testCases ?? [];
+    const total = list.length;
 
-    const agg = {
-      total,
-      pass: 0,
-      fail: 0,
-      na: 0,
-      skip: 0,
-    };
+    const agg = { total, pass: 0, fail: 0, na: 0, skip: 0 };
 
-    testCases?.forEach((tc) => {
-      switch (tc.result) {
+    list.forEach((tc) => {
+      switch (normalizeRunResult(tc?.result)) {
         case "PASS":
           agg.pass += 1;
           break;
@@ -174,31 +209,17 @@ export default function TestResultDetailPage() {
     return agg;
   }, [testCases]);
 
-  // (1) 스텝 단위 통계: 도넛 차트용
+  // 스텝 단위 통계: 도넛 차트용
   const stepStats = useMemo(() => {
-    const agg = {
-      total: 0,
-      pass: 0,
-      fail: 0,
-      skip: 0,
-      na: 0,
-      jump: 0,
-    };
+    const agg = { total: 0, pass: 0, fail: 0, skip: 0, na: 0, jump: 0 };
 
-    testCases?.forEach((tc) => {
-      const totalStepCount = tc.totalStepCount ?? 0;
-      const passStepCount = tc.passStepCount ?? 0;
-      const failStepCount = tc.failStepCount ?? 0;
-      const skipStepCount = tc.skipStepCount ?? 0;
-      const naStepCount = tc.naStepCount ?? 0;
-      const jumpStepCount = tc.jumpStepCount ?? 0;
-
-      agg.total += totalStepCount;
-      agg.pass += passStepCount;
-      agg.fail += failStepCount;
-      agg.skip += skipStepCount;
-      agg.na += naStepCount;
-      agg.jump += jumpStepCount;
+    (testCases ?? []).forEach((tc) => {
+      agg.total += Number(tc?.totalStepCount ?? 0) || 0;
+      agg.pass += Number(tc?.passStepCount ?? 0) || 0;
+      agg.fail += Number(tc?.failStepCount ?? 0) || 0;
+      agg.skip += Number(tc?.skipStepCount ?? 0) || 0;
+      agg.na += Number(tc?.naStepCount ?? 0) || 0;
+      agg.jump += Number(tc?.jumpStepCount ?? 0) || 0;
     });
 
     return agg;
@@ -210,7 +231,7 @@ export default function TestResultDetailPage() {
     return Math.round((stepStats.pass / stepStats.total) * 100);
   }, [stepStats]);
 
-  // (2) 총 실행 시간 (start/end 차이)
+  // 총 실행 시간 (start/end 차이)
   const totalDurationMs = useMemo(() => {
     if (!start || !end) return null;
     const s = new Date(start);
@@ -220,34 +241,32 @@ export default function TestResultDetailPage() {
     return diff;
   }, [start, end]);
 
-  // (3) 실행 로그 토글 상태
+  // 실행 로그 토글 상태
   const [logOpen, setLogOpen] = useState(false);
   const toggleLogOpen = () => setLogOpen((prev) => !prev);
 
-  // (4) 총평(코멘트) 상태
+  // 총평(코멘트) 상태
   const [comment, setComment] = useState("");
   const [savingComment, setSavingComment] = useState(false);
 
   // run 이 로드되거나 변경될 때 comment 초기값/동기화
   useEffect(() => {
-    if (run && typeof run.comment === "string") {
-      setComment(run.comment);
-    } else {
-      setComment("");
-    }
+    if (run && typeof run.comment === "string") setComment(run.comment);
+    else setComment("");
   }, [run]);
 
+  // ✅ 코멘트 저장: 빈 문자열도 저장 가능(=코멘트 삭제/초기화)
   const handleSaveComment = async () => {
-    if (!run || !comment.trim()) return;
+    if (!run?.id) return;
 
     try {
       setSavingComment(true);
       await updateScenarioTestRunComment(Number(run.id), {
-        comment: comment.trim(),
+        comment: (comment ?? "").trim(),
       });
-      showToast("success", "총평이 등록되었습니다.");
+      showSuccess("총평이 저장되었습니다.");
     } catch (e) {
-      showToast("error", toErrorMessage(e));
+      showError(toErrorMessage(e));
     } finally {
       setSavingComment(false);
     }
@@ -395,8 +414,7 @@ export default function TestResultDetailPage() {
                     <ResultBadge result={runResult} />
                   </div>
                   <div className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
-                    테스트케이스 {tcStats.total}개 / 스텝 {stepStats.total}개
-                    기준
+                    테스트케이스 {tcStats.total}개 / 스텝 {stepStats.total}개 기준
                   </div>
                 </div>
               </div>
@@ -433,9 +451,9 @@ export default function TestResultDetailPage() {
               </div>
             </div>
 
-            {/* 실행 정보 / 결과 요약 / 하단 영역을 세로로 배치 */}
+            {/* 실행 정보 / 결과 요약 / 하단 영역 */}
             <div className="flex flex-col gap-6">
-              {/* 1) 실행 정보 + 에러 카드 (한 행 전체) */}
+              {/* 1) 실행 정보 + 에러 카드 */}
               <div className="flex flex-col gap-6">
                 {/* 실행 정보 카드 */}
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
@@ -450,6 +468,7 @@ export default function TestResultDetailPage() {
                       {runTriggerType}
                     </span>
                   </div>
+
                   <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-y-6 gap-x-8">
                     <div>
                       <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1 block">
@@ -462,6 +481,7 @@ export default function TestResultDetailPage() {
                         {testCode}
                       </div>
                     </div>
+
                     <div>
                       <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1 block">
                         시나리오
@@ -546,7 +566,7 @@ export default function TestResultDetailPage() {
                   </div>
                 </div>
 
-                {/* 에러 메시지 (있을 때만) */}
+                {/* 에러 메시지 */}
                 {errorMessage && (
                   <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700  p-5">
                     <h3 className="text-sm font-bold text-rose-600 dark:text-rose-400 flex items-center gap-2 mb-2">
@@ -562,7 +582,7 @@ export default function TestResultDetailPage() {
                 )}
               </div>
 
-              {/* 2) 결과 요약 + 도넛 차트 (한 행 전체) */}
+              {/* 2) 결과 요약 */}
               <ResultSummaryPanel
                 start={start}
                 end={end}
@@ -571,9 +591,8 @@ export default function TestResultDetailPage() {
                 tcStats={tcStats}
               />
 
-              {/* 3) 하단: 테스트케이스 테이블 + 실행 로그(토글) + 총평 */}
+              {/* 3) 테스트케이스 테이블 + 실행 로그 + 총평 */}
               <div className="flex flex-col gap-6">
-                {/* 테스트케이스 테이블 */}
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
                   <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
                     <span className="material-symbols-outlined text-gray-400">
@@ -595,7 +614,7 @@ export default function TestResultDetailPage() {
                   />
                 </div>
 
-                {/* 실행 로그 카드 - 토글로 RunReportPanel 접기/펼치기 */}
+                {/* 실행 로그 토글 */}
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
                   <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -629,7 +648,7 @@ export default function TestResultDetailPage() {
                   )}
                 </div>
 
-                {/* 총평(코멘트) 카드 */}
+                {/* 총평 */}
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
@@ -651,6 +670,7 @@ export default function TestResultDetailPage() {
                     value={comment}
                     onChange={(e) => setComment(e.target.value)}
                   />
+
                   <div className="mt-3 flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400">
                     <span>{comment.length} 자 입력됨</span>
                     <div className="flex items-center gap-2">
@@ -658,14 +678,14 @@ export default function TestResultDetailPage() {
                         type="button"
                         className="px-2 py-1 rounded-md border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 text-[11px] hover:bg-gray-50 dark:hover:bg-gray-800"
                         onClick={() => setComment("")}
-                        disabled={savingComment || !comment}
+                        disabled={savingComment}
                       >
                         초기화
                       </button>
                       <button
                         type="button"
                         onClick={handleSaveComment}
-                        disabled={savingComment || !comment}
+                        disabled={savingComment}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <span>{savingComment ? "저장 중..." : "저장"}</span>
@@ -707,9 +727,10 @@ export default function TestResultDetailPage() {
       <FailCodeModal
         open={failCodeModal.open}
         currentFailCode={failCodeModal.currentFailCode}
+        currentFailComment={failCodeModal.currentFailComment}
         targetInfo={failCodeModal.targetInfo}
         onClose={handleCloseFailCodeModal}
-        onSave={handleSaveFailCode}
+        onSave={handleSaveFailMeta}
       />
     </>
   );

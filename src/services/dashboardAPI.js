@@ -31,3 +31,12 @@ export async function getScenarioTestHeatMap(params, signal) {
   });
   return res?.data?.data ?? res?.data;
 }
+
+// 특정 테스트의 특정 날짜 실행 리스트
+export async function getScenarioTestRunsAtDate(id, params, signal) {
+  const res = await api.get(`dashboards/tests/${id}`, {
+    params,
+    signal
+  });
+  return res?.data?.data ?? res?.data;
+}

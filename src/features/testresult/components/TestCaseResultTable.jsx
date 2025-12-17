@@ -71,6 +71,9 @@ const SkeletonRow = () => (
       <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-48 animate-pulse" />
     </td>
     <td className="px-4 py-4">
+      <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-10 animate-pulse mx-auto" />
+    </td>
+    <td className="px-4 py-4">
       <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-12 animate-pulse mx-auto" />
     </td>
     <td className="px-4 py-4">
@@ -126,11 +129,7 @@ export default function TestCaseResultTable({
       {/* Error State */}
       {error && (
         <div className="mb-4 p-3 rounded-md bg-rose-50 border border-rose-200 text-rose-700 dark:bg-rose-900/20 dark:border-rose-800 dark:text-rose-300 text-sm flex items-center gap-2">
-          <svg
-            className="w-5 h-5 flex-shrink-0"
-            fill="currentColor"
-            viewBox="0 0 20 20"
-          >
+          <svg className="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
             <path
               fillRule="evenodd"
               d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
@@ -147,43 +146,28 @@ export default function TestCaseResultTable({
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
             <thead>
             <tr>
-              <TableHeaderCell className="w-[10%] min-w-[100px]">
-                케이스 ID
-              </TableHeaderCell>
-              <TableHeaderCell className="w-[30%]">케이스명</TableHeaderCell>
-              <TableHeaderCell className="w-[10%] text-center">
-                시간(ms)
-              </TableHeaderCell>
-              <TableHeaderCell className="w-[10%] text-center">
-                결과
-              </TableHeaderCell>
-              <TableHeaderCell className="w-[15%] text-center">
-                실패 코드
-              </TableHeaderCell>
-              <TableHeaderCell className="w-[10%] text-center">
-                증거
-              </TableHeaderCell>
-              <TableHeaderCell className="w-[15%] text-center">
-                이슈
-              </TableHeaderCell>
+              <TableHeaderCell className="w-[15%] min-w-[100px]">테스트 케이스 코드</TableHeaderCell>
+              <TableHeaderCell className="w-[25%]">테스트 케이스 명칭</TableHeaderCell>
+
+              <TableHeaderCell className="w-[8%] text-center">총 스텝</TableHeaderCell>
+
+              <TableHeaderCell className="w-[10%] text-center">시간(ms)</TableHeaderCell>
+              <TableHeaderCell className="w-[10%] text-center">결과</TableHeaderCell>
+              <TableHeaderCell className="w-[15%] text-center">실패 코드</TableHeaderCell>
+              <TableHeaderCell className="w-[10%] text-center">증거</TableHeaderCell>
+              <TableHeaderCell className="w-[15%] text-center">이슈</TableHeaderCell>
             </tr>
             </thead>
 
             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
             {loading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <SkeletonRow key={`skeleton-${i}`} />
-              ))
+              Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={`skeleton-${i}`} />)
             ) : rows.length === 0 && !error ? (
               <tr>
-                <td colSpan={7} className="px-6 py-10 text-center">
+                {/* colSpan 7 → 8 */}
+                <td colSpan={8} className="px-6 py-10 text-center">
                   <div className="flex flex-col items-center justify-center text-gray-400 dark:text-gray-500">
-                    <svg
-                      className="w-10 h-10 mb-2 opacity-20"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
+                    <svg className="w-10 h-10 mb-2 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path
                         strokeLinecap="round"
                         strokeLinejoin="round"
@@ -191,9 +175,7 @@ export default function TestCaseResultTable({
                         d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01M9 16h.01"
                       />
                     </svg>
-                    <span className="text-sm font-medium">
-                        표시할 결과가 없습니다.
-                      </span>
+                    <span className="text-sm font-medium">표시할 결과가 없습니다.</span>
                   </div>
                 </td>
               </tr>
@@ -205,11 +187,17 @@ export default function TestCaseResultTable({
                 const durMs = tc?.durationMs ?? "-";
                 const result = tc?.runResult ?? tc?.result ?? "N/A";
 
-                const issueId =
-                  tc?.issueId ?? tc?.issue ?? tc?.jiraIssueKey ?? null;
+                // totalStepCounts (백엔드/DTO 네이밍 흔들림 대비로 후보 몇 개 포함)
+                const totalStepsRaw =
+                  tc?.totalStepCount ??
+                  tc?.testCase?.totalStepCount ??
+                  null;
 
-                const evidenceStr =
-                  tc?.errorEvidence ?? tc?.error_evidence ?? null;
+                const totalSteps =
+                  Number.isFinite(Number(totalStepsRaw)) ? Number(totalStepsRaw) : "-";
+
+                const issueId = tc?.issueId ?? tc?.issue ?? tc?.jiraIssueKey ?? null;
+                const evidenceStr = tc?.errorEvidence ?? tc?.error_evidence ?? null;
 
                 const failCodeStr = tc?.testFailCode?.code ?? null;
                 const failComment = tc?.failComment ?? null;
@@ -240,7 +228,7 @@ export default function TestCaseResultTable({
                     {/* Case Code */}
                     <td className="px-4 py-3 whitespace-nowrap">
                       <div
-                        className="text-xs font-mono text-gray-600 dark:text-gray-400 truncate max-w-[120px]"
+                        className="text-xs font-medium text-gray-900 dark:text-gray-400 truncate max-w-[150px]"
                         title={caseCode}
                       >
                         {caseCode}
@@ -250,10 +238,17 @@ export default function TestCaseResultTable({
                     {/* Case Name */}
                     <td className="px-4 py-3">
                       <div
-                        className="text-xs font-medium text-gray-900 dark:text-gray-100 line-clamp-2"
+                        className="text-xs font-medium text-gray-600 dark:text-gray-100 line-clamp-2"
                         title={caseName}
                       >
                         {caseName}
+                      </div>
+                    </td>
+
+                    {/*  Total Step Counts */}
+                    <td className="px-4 py-3 text-center whitespace-nowrap">
+                      <div className="text-xs text-gray-500 dark:text-gray-400 font-mono">
+                        {totalSteps}개
                       </div>
                     </td>
 
@@ -275,9 +270,7 @@ export default function TestCaseResultTable({
                     <td className="px-4 py-3 text-center whitespace-nowrap">
                       <div className="flex justify-center">
                         {isPass ? (
-                          <span className="text-[10px] text-gray-300 dark:text-gray-600 select-none">
-                              —
-                            </span>
+                          <span className="text-[10px] text-gray-300 dark:text-gray-600 select-none">—</span>
                         ) : (
                           <button
                             type="button"
@@ -290,11 +283,7 @@ export default function TestCaseResultTable({
                                 : "text-gray-600 border border-dashed border-gray-300 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600"
                             }
                               `}
-                            title={
-                              failCodeStr
-                                ? "실패 코드 수정"
-                                : "실패 코드 할당 필요"
-                            }
+                            title={failCodeStr ? "실패 코드 수정" : "실패 코드 할당 필요"}
                           >
                             {failCodeStr || "코드 할당"}
                           </button>
@@ -311,7 +300,7 @@ export default function TestCaseResultTable({
                             const imgs = parseEvidenceList(evidenceStr)
                               .map(toEvidenceUrl)
                               .filter(Boolean);
-                            onOpenEvidence(imgs);
+                            onOpenEvidence?.(imgs);
                           }}
                           className="inline-flex items-center justify-center p-1.5 rounded-md bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors"
                           title="증거 이미지 보기"
@@ -319,9 +308,7 @@ export default function TestCaseResultTable({
                           <IconImage /> <span className="text-xs ml-1">스크린샷</span>
                         </button>
                       ) : (
-                        <span className="text-gray-300 dark:text-gray-600">
-                            -
-                          </span>
+                        <span className="text-gray-300 dark:text-gray-600">-</span>
                       )}
                     </td>
 
@@ -341,15 +328,7 @@ export default function TestCaseResultTable({
                         <button
                           type="button"
                           onClick={() =>
-                            onClickCreateJira(
-                              runId,
-                              tc,
-                              caseCode,
-                              caseName,
-                              testName,
-                              deviceName,
-                              udid
-                            )
+                            onClickCreateJira?.(runId, tc, caseCode, caseName, testName, deviceName, udid)
                           }
                           className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium text-gray-700 bg-gray-100 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700 transition-all"
                           title="Jira 이슈 생성"

@@ -65,59 +65,6 @@ export default function ResultSummaryPanel({
 
           <TestResultChart stats={stepStats} />
 
-          <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
-            <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-lg p-3 border border-emerald-100 dark:border-emerald-800 flex justify-between items-center">
-              <span className="font-medium text-emerald-700 dark:text-emerald-300">
-                PASS
-              </span>
-              <span className="text-lg font-bold text-emerald-800 dark:text-emerald-200">
-                {stepStats?.pass ?? 0}
-              </span>
-            </div>
-            <div className="bg-rose-50 dark:bg-rose-900/20 rounded-lg p-3 border border-rose-100 dark:border-rose-800 flex justify-between items-center">
-              <span className="font-medium text-rose-700 dark:text-rose-300">
-                FAIL
-              </span>
-              <span className="text-lg font-bold text-rose-800 dark:text-rose-200">
-                {stepStats?.fail ?? 0}
-              </span>
-            </div>
-            <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-3 border border-amber-100 dark:border-amber-800 flex justify-between items-center">
-              <span className="font-medium text-amber-700 dark:text-amber-300">
-                SKIP
-              </span>
-              <span className="text-lg font-bold text-amber-800 dark:text-amber-200">
-                {stepStats?.skip ?? 0}
-              </span>
-            </div>
-            <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-3 border border-slate-100 dark:border-slate-700 flex justify-between items-center">
-              <span className="font-medium text-slate-600 dark:text-slate-300">
-                N/A
-              </span>
-              <span className="text-lg font-bold text-slate-800 dark:text-slate-200">
-                {stepStats?.na ?? 0}
-              </span>
-            </div>
-          </div>
-
-          <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
-            <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-lg p-3 border border-indigo-100 dark:border-indigo-800 flex justify-between items-center">
-              <span className="font-medium text-indigo-700 dark:text-indigo-300">
-                JUMP
-              </span>
-              <span className="text-lg font-bold text-indigo-800 dark:text-indigo-200">
-                {stepStats?.jump ?? 0}
-              </span>
-            </div>
-            <div className="bg-gray-50 dark:bg-gray-900/40 rounded-lg p-3 border border-gray-200 dark:border-gray-700 flex justify-between items-center">
-              <span className="font-medium text-gray-700 dark:text-gray-300">
-                Total
-              </span>
-              <span className="text-lg font-bold text-gray-900 dark:text-gray-100">
-                {stepStats?.total ?? 0}
-              </span>
-            </div>
-          </div>
         </section>
 
         {/* RIGHT: 전체 실행 정보 + (스텝 기준) 결과 요약 표 */}
@@ -199,48 +146,59 @@ export default function ResultSummaryPanel({
             <div className="rounded-lg bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 px-5 py-4">
               <table className="w-full text-xs border-separate border-spacing-y-1">
                 <tbody>
+                {/* PASS */}
                 <tr>
                   <th className="text-left font-medium text-emerald-700 dark:text-emerald-300">
-                    Pass
+                    PASS
                   </th>
                   <td className="text-right font-semibold text-emerald-700 dark:text-emerald-300">
                     {stepStats?.pass ?? 0}
                   </td>
                 </tr>
+
+                {/* FAIL */}
                 <tr>
                   <th className="text-left font-medium text-rose-700 dark:text-rose-300">
-                    Fail
+                    FAIL
                   </th>
                   <td className="text-right font-semibold text-rose-700 dark:text-rose-300">
                     {stepStats?.fail ?? 0}
                   </td>
                 </tr>
+
+                {/* SKIP */}
                 <tr>
-                  <th className="text-left font-medium text-amber-700 dark:text-amber-300">
+                  <th className="text-left font-medium text-slate-700 dark:text-slate-300">
                     SKIP
                   </th>
-                  <td className="text-right font-semibold text-amber-700 dark:text-amber-300">
+                  <td className="text-right font-semibold text-slate-700 dark:text-slate-300">
                     {stepStats?.skip ?? 0}
                   </td>
                 </tr>
+
+                {/* N/A */}
                 <tr>
-                  <th className="text-left font-medium text-slate-700 dark:text-slate-300">
+                  <th className="text-left font-medium text-sky-700 dark:text-sky-300">
                     N/A
                   </th>
-                  <td className="text-right font-semibold text-slate-700 dark:text-slate-300">
+                  <td className="text-right font-semibold text-sky-700 dark:text-sky-300">
                     {stepStats?.na ?? 0}
                   </td>
                 </tr>
+
+                {/* JUMP */}
                 <tr>
-                  <th className="text-left font-medium text-indigo-700 dark:text-indigo-300">
+                  <th className="text-left font-medium text-amber-700 dark:text-amber-300">
                     JUMP
                   </th>
-                  <td className="text-right font-semibold text-indigo-700 dark:text-indigo-300">
+                  <td className="text-right font-semibold text-amber-700 dark:text-amber-300">
                     {stepStats?.jump ?? 0}
                   </td>
                 </tr>
+
+                {/* TOTAL */}
                 <tr>
-                  <th className="text-left font-medium text-gray-600 dark:text-gray-300">
+                  <th className="text-left font-medium text-slate-600 dark:text-slate-300">
                     Total
                   </th>
                   <td className="text-right font-semibold text-gray-900 dark:text-gray-100">
