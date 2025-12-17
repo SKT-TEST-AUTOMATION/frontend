@@ -38,7 +38,7 @@ export default function RegisterModal({ open, onClose, initial, onSaved }) {
       onSaved();
       onClose();
     } catch (err) {
-      setError((err && err.message) || "Failed to register device");
+      setError((err && err.message) || "등록 실패");
     } finally {
       setSaving(false);
     }
@@ -50,9 +50,9 @@ export default function RegisterModal({ open, onClose, initial, onSaved }) {
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
           <div>
-            <h3 className="text-lg font-semibold text-slate-900">Register Device</h3>
+            <h3 className="text-lg font-semibold text-slate-900">디바이스 등록</h3>
             <p className="text-sm text-slate-500 mt-1">
-              Add this device to your managed fleet.
+              테스트에 사용하기 위해 디바이스를 등록하세요.
             </p>
           </div>
           <button
@@ -82,7 +82,7 @@ export default function RegisterModal({ open, onClose, initial, onSaved }) {
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
-                Device Name
+                디바이스 이름
               </label>
               <input
                 type="text"
@@ -138,7 +138,7 @@ export default function RegisterModal({ open, onClose, initial, onSaved }) {
             onClick={onClose}
             className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
           >
-            Cancel
+            취소
           </button>
           <button
             onClick={handleSubmit}
@@ -167,7 +167,7 @@ export default function RegisterModal({ open, onClose, initial, onSaved }) {
                 ></path>
               </svg>
             )}
-            {saving ? "Registering..." : "Confirm Registration"}
+            {saving ? "등록 중..." : "등록"}
           </button>
         </div>
       </div>
