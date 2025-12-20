@@ -32,7 +32,7 @@ export default function IntervalSettings({
             checked={enabled}
             onChange={(e) => onToggle(e.target.checked)}
           />
-          <span className="text-sm text-gray-800 dark:text-gray-200">반복 실행 사용</span>
+          <span className="text-sm text-gray-800 dark:text-gray-200">추가 실행</span>
         </label>
         {enabled && (
           <span className="text-xs text-gray-500 dark:text-gray-400">
@@ -70,13 +70,13 @@ export default function IntervalSettings({
         </label>
       </div>
 
-      {/* ✅ 실시간 요약 문구 */}
+      {/* 실시간 요약 문구 */}
       <div
         className="mt-3 text-xs text-sky-800 dark:text-sky-300"
         aria-live="polite"
       >
         {enabled
-          ? `* ${displayMinutes}분 간격으로 ${displayTimes}번 더 반복 실행됩니다.`
+          ? `* ${displayMinutes}분 간격으로 ${displayTimes}번 더 추가 실행됩니다.`
           : ``}
       </div>
     </div>

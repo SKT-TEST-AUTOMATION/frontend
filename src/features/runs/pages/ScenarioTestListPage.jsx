@@ -14,6 +14,7 @@ import RunReportPanel from "../components/RunReportPanel";
 import { ReserveScheduleModal } from "../components/ReserveScheduleModal";
 import { generatePath, useNavigate } from 'react-router-dom';
 import RunRequestModal from '../components/run-request/RunRequestModal.jsx';
+import { createSchedule } from '../../../services/scheduleAPI.js';
 
 // Context for providing StatusBadge to row items (avoid referencing memo-wrapped component inside itself)
 const StatusBadgeContext = React.createContext(() => null);
@@ -117,14 +118,14 @@ const ScenarioTestRow = React.memo(function ScenarioTestRow({
         </div>
 
         <div className="col-span-1 flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => onRequestReserve(id)}
-            className="inline-flex items-center justify-center rounded-lg w-8 h-8 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition"
-            title="예약 생성"
-          >
-            <span className="material-symbols-outlined text-base">event</span>
-          </button>
+          {/*<button*/}
+          {/*  type="button"*/}
+          {/*  onClick={() => onRequestReserve(id)}*/}
+          {/*  className="inline-flex items-center justify-center rounded-lg w-8 h-8 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition"*/}
+          {/*  title="예약 생성"*/}
+          {/*>*/}
+          {/*  <span className="material-symbols-outlined text-base">event</span>*/}
+          {/*</button>*/}
           <button
             type="button"
             onClick={() => canRun && onRequestRun(id)}
@@ -478,8 +479,41 @@ export default function ScenarioTestListPage() {
       </div>
       {
         pickerOpen && (
-          <RunRequestModal open={pickerOpen} onClose={closePicker} onSubmit={() => {console.log("실행 요청")}} />
-          // <DeviceSelectModal onClose={closePicker} onConfirm={handlePick} />
+          <RunRequestModal
+            open={pickerOpen}
+            onClose={closePicker}
+            scenarioTestId={selectedTestId}
+            onSubmit={async (evt) => {
+              try {
+                  const res = await runScenarioTest(evt.scenarioTestId, evt.payload);
+
+                  const runIdFromRes = res?.runId ?? null;
+                  if (runIdFromRes) {
+                    setRunIds((prev) => ({ ...prev, [evt.scenarioTestId]: runIdFromRes }));
+                    setExpandedOne({ id: evt.scenarioTestId, runId: runIdFromRes });
+                  }
+
+                  showToast("success", "테스트가 실행되었습니다.");
+                  const controller = new AbortController();
+                  await fetchTests(controller.signal);
+                  closePicker();
+                  return;
+              } catch (e) {
+                showToast("error", "테스트 실행 요청에 실패했습니다.",toErrorMessage(e));
+              }
+            }}
+
+            onCreateSchedule={async (scenarioTestId, schedulePayload) => {
+              try {
+                await createSchedule(scenarioTestId, schedulePayload);
+                showToast("success", "예약이 생성되었습니다.");
+                closePicker();
+              } catch (e) {
+                showToast("error", "테스트 예약 생성에 실패했습니다.",toErrorMessage(e));
+                // showToast({type:"error", message:"테스트 예약 생성에 실패했습니다.",detailMessage:toErrorMessage(e)});
+              }
+            }}
+          />
         )
       }
       {
