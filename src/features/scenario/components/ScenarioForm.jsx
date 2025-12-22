@@ -1,204 +1,354 @@
-import { useMemo, useState } from "react";
+import React, { useMemo, useState, useCallback } from "react";
+import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
+
+function reorder(list, startIndex, endIndex) {
+  const result = Array.from(list);
+  const [removed] = result.splice(startIndex, 1);
+  result.splice(endIndex, 0, removed);
+  return result;
+}
+
+
+function FieldCard({ label, children, className = "" }) {
+  return (
+    <div
+      className={[
+        "bg-gray-50 dark:bg-gray-900/40",
+        "p-4 rounded-lg border border-gray-200/60 dark:border-gray-700/60",
+        className,
+      ].join(" ")}
+    >
+      {label && (
+        <label className="block text-sm font-medium text-gray-800 dark:text-gray-100 mb-2">
+          {label}
+        </label>
+      )}
+      {children}
+    </div>
+  );
+}
 
 export default function ScenarioForm({
-  form, set,
-  candidates = [], tcLoading = false, tcError = null,
-  selected, setSelected,
-  footerActions,
-  readOnly = false,
-}) {
+                                       form,
+                                       set,
+                                       candidates = [],
+                                       tcLoading = false,
+                                       tcError = null,
+                                       selected = [],
+                                       setSelected,
+                                       footerActions,
+                                       readOnly = false,
+                                     }) {
   const [q, setQ] = useState("");
 
-  const filtered = useMemo(() => {
-    if (!q) return candidates;
+  const filteredCandidates = useMemo(() => {
+    const list = Array.isArray(candidates) ? candidates : [];
+    if (!q) return list;
     const s = q.toLowerCase();
-    return (candidates || []).filter((c) => c.label.toLowerCase().includes(s));
+    return list.filter((c) => String(c?.label ?? "").toLowerCase().includes(s));
   }, [candidates, q]);
 
-  // 조작 핸들러 (readOnly면 동작 X)
-  const add = (item) => {
-    if (readOnly || !item) return;
-    if (selected.some((s) => s.id === item.id)) return; // 중복 방지
-    setSelected?.([...selected, item]);
-  };
-  const remove = (id) => {
+  const selectedIdSet = useMemo(() => {
+    return new Set((selected || []).map((x) => String(x.id)));
+  }, [selected]);
+
+  const pool = useMemo(() => {
+    return (filteredCandidates || []).filter((it) => !selectedIdSet.has(String(it.id)));
+  }, [filteredCandidates, selectedIdSet]);
+
+  const add = useCallback(
+    (item) => {
+      if (readOnly || !item) return;
+      if (selectedIdSet.has(String(item.id))) return;
+      setSelected?.([...(selected || []), item]);
+    },
+    [readOnly, selected, setSelected, selectedIdSet]
+  );
+
+  const remove = useCallback(
+    (id) => {
+      if (readOnly) return;
+      setSelected?.((selected || []).filter((s) => String(s.id) !== String(id)));
+    },
+    [readOnly, selected, setSelected]
+  );
+
+  const clearAll = useCallback(() => {
     if (readOnly) return;
-    setSelected?.(selected.filter((s) => s.id !== id));
-  };
-  const moveUp = (idx) => {
-    if (readOnly || idx <= 0) return;
-    const arr = [...selected];
-    [arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]];
-    setSelected?.(arr);
-  };
-  const moveDown = (idx) => {
-    if (readOnly || idx >= selected.length - 1) return;
-    const arr = [...selected];
-    [arr[idx + 1], arr[idx]] = [arr[idx], arr[idx + 1]];
-    setSelected?.(arr);
-  };
+    setSelected?.([]);
+  }, [readOnly, setSelected]);
+
+  const onDragEnd = useCallback(
+    (result) => {
+      if (readOnly) return;
+      const { source, destination, draggableId } = result;
+      if (!destination) return;
+
+      if (source.droppableId === destination.droppableId) {
+        if (source.droppableId === "selected") {
+          if (source.index === destination.index) return;
+          const next = reorder(selected || [], source.index, destination.index);
+          setSelected?.(next);
+        }
+        return;
+      }
+
+      if (source.droppableId === "pool" && destination.droppableId === "selected") {
+        const item = pool[source.index];
+        if (!item || selectedIdSet.has(String(item.id))) return;
+        const next = Array.from(selected || []);
+        next.splice(destination.index, 0, item);
+        setSelected?.(next);
+        return;
+      }
+
+      if (source.droppableId === "selected" && destination.droppableId === "pool") {
+        setSelected?.((selected || []).filter((s) => String(s.id) !== String(draggableId)));
+      }
+    },
+    [readOnly, pool, selected, setSelected, selectedIdSet]
+  );
+
+
+  const inputCls = [
+    "w-full px-3 py-2 rounded-md text-sm",
+    readOnly
+      ? "bg-gray-100 dark:bg-gray-900 border border-gray-200/50 dark:border-gray-700/50 text-gray-500 dark:text-gray-400"
+      : "bg-white dark:bg-gray-900 border border-gray-200/70 dark:border-gray-700 text-gray-800 dark:text-gray-100",
+  ].join(" ");
+
+  const smallInputCls = [
+    "w-full px-3 py-2 rounded-md text-sm",
+    "bg-white dark:bg-gray-900 border border-gray-200/70 dark:border-gray-700",
+    "text-gray-800 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500",
+    "focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500",
+  ].join(" ");
+
+  const droppableBox = (isOver) =>
+    [
+      "flex-1 min-h-0 overflow-y-auto rounded-md",
+      "bg-white dark:bg-gray-950/30",
+      "border border-gray-200/70 dark:border-gray-700",
+      isOver ? "ring-2 ring-blue-500/20 border-blue-400" : "",
+    ].join(" ");
+
+  const poolItemCls = (isDragging) =>
+    [
+      "group flex items-center justify-between gap-3",
+      "px-3 py-2 rounded-md text-sm",
+      "border border-transparent",
+      isDragging
+        ? "bg-white dark:bg-gray-900 shadow-lg border-gray-200/70 dark:border-gray-700/70"
+        : "hover:bg-gray-100 dark:hover:bg-gray-800/40",
+    ].join(" ");
+
+  const selectedItemCls = (isDragging) =>
+    [
+      "group flex items-center justify-between gap-3",
+      "px-3 py-2 rounded-md text-sm",
+      "bg-white dark:bg-gray-900",
+      "border border-gray-200/70 dark:border-gray-700",
+      isDragging ? "shadow-xl border-gray-300 dark:border-gray-600" : "hover:bg-gray-50 dark:hover:bg-gray-800/30",
+    ].join(" ");
+
+  const panelCls = "h-[560px] flex flex-col";
 
   return (
-    <section className="grid grid-cols-1 gap-6">
-      {/* 기본정보 */}
-      <div className="bg-white dark:bg-gray-900/50 p-6 rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-800 dark:text-gray-100 mb-2">
-              시나리오 ID
-            </label>
-            <input
-              value={form.code}
-              onChange={(e) => !readOnly && set({ code: e.target.value })}
-              placeholder="예: SCEN-001"
-              readOnly={readOnly}
-              disabled={readOnly}
-              className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60"
-            />
-          </div>
+    <div className="space-y-12">
+      {/* 기본 정보 */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 items-stretch">
+        <FieldCard label="식별자">
+          <input
+            value={form.code}
+            onChange={(e) => !readOnly && set({ code: e.target.value })}
+            placeholder={readOnly ? undefined : "예: SCEN-001"}
+            className={inputCls}
+            readOnly={readOnly}
+            disabled={readOnly}
+          />
+        </FieldCard>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-800 dark:text-gray-100 mb-2">
-              시나리오 명칭
-            </label>
-            <input
-              value={form.name}
-              onChange={(e) => !readOnly && set({ name: e.target.value })}
-              placeholder="시나리오 명칭을 입력하세요"
-              readOnly={readOnly}
-              disabled={readOnly}
-              className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60"
-            />
-          </div>
+        <FieldCard label="명칭">
+          <input
+            value={form.name}
+            onChange={(e) => !readOnly && set({ name: e.target.value })}
+            placeholder={readOnly ? undefined : "시나리오 명칭을 입력하세요"}
+            className={inputCls}
+            readOnly={readOnly}
+            disabled={readOnly}
+          />
+        </FieldCard>
 
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-800 dark:text-gray-100 mb-2">
-              설명
-            </label>
-            <textarea
-              rows={4}
-              value={form.description}
-              onChange={(e) => !readOnly && set({ description: e.target.value })}
-              placeholder="시나리오에 대한 설명을 입력하세요"
-              readOnly={readOnly}
-              disabled={readOnly}
-              className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60"
-            />
-          </div>
-        </div>
+        <FieldCard label="설명" className="sm:col-span-2">
+          <textarea
+            rows={3}
+            value={form.description}
+            onChange={(e) => !readOnly && set({ description: e.target.value })}
+            placeholder={readOnly ? undefined : "시나리오에 대한 간단한 설명을 입력하세요"}
+            className={inputCls + " resize-none"}
+            readOnly={readOnly}
+            disabled={readOnly}
+          />
+        </FieldCard>
       </div>
 
-      {/* 테스트 케이스 선택/정렬 (readOnly면 후보/검색 숨김, 선택 목록만 표시) */}
-      <div className="bg-white dark:bg-gray-900/50 p-6 rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm">
-        <label className="block text-sm font-medium text-gray-800 dark:text-gray-100 mb-3">
-          테스트 케이스 선택
-        </label>
+      {/* 테스트 케이스 구성 */}
+      <section>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <DragDropContext onDragEnd={onDragEnd}>
 
-        <div className={`grid grid-cols-1 md:grid-cols-2 gap-6 ${readOnly ? "md:grid-cols-1" : ""}`}>
-          {!readOnly && (
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <input
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                  placeholder="테스트 케이스 검색"
-                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-blue-500/40"
-                />
-              </div>
-              <div className="h-64 overflow-auto rounded-lg border border-gray-200 dark:border-gray-800">
-                {tcLoading && <div className="p-4 text-sm text-gray-500">불러오는 중...</div>}
-                {tcError && <div className="p-4 text-sm text-red-500">목록을 불러오지 못했습니다.</div>}
-                {!tcLoading && !tcError && (
-                  <ul className="divide-y divide-gray-100 dark:divide-gray-800">
-                    {filtered.map((it) => (
-                      <li key={it.id} className="flex items-center justify-between p-3">
-                        <span className="text-sm">{it.label}</span>
-                        <button
-                          type="button"
-                          onClick={() => add(it)}
-                          className="px-2.5 py-1 rounded-md text-sm bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700"
-                        >
-                          추가
-                        </button>
-                      </li>
-                    ))}
-                    {filtered.length === 0 && (
-                      <li className="p-3 text-sm text-gray-500">결과가 없습니다.</li>
-                    )}
-                  </ul>
-                )}
-              </div>
-            </div>
-          )}
+            {/* 왼쪽: 가용한 항목 */}
+            {!readOnly && (
+              <FieldCard label="테스트 케이스" className={panelCls}>
+                <div className="flex items-center gap-2 mb-3">
+                  <input
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
+                    placeholder="검색…"
+                    className={smallInputCls}
+                  />
+                </div>
 
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              {
-                !readOnly && (
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
-                    선택된 케이스
-                  </span>
-                )
-              }
-              {!readOnly && selected.length > 0 && (
-                <button
-                  type="button"
-                  className="text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800"
-                  onClick={() => setSelected?.([])}
-                >
-                  모두 제거
-                </button>
-              )}
-            </div>
-
-            <ol className="h-64 overflow-auto rounded-lg border border-gray-200 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800">
-              {selected?.length === 0 && (
-                <li className="p-4 text-sm text-gray-500">선택된 항목이 없습니다.</li>
-              )}
-              {selected?.map((s, idx) => (
-                <li key={s.id} className="flex items-center justify-between p-3 gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs w-7 h-7 inline-flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-                      {idx + 1}
-                    </span>
-                    <span className="text-sm">{s.label ?? `TC${s.id}`}</span>
+                {tcError && (
+                  <div className="mb-3 text-sm text-rose-600 bg-rose-50 dark:bg-rose-900/20 border border-rose-200/60 dark:border-rose-800/40 rounded-md px-3 py-2">
+                    {String(tcError)}
                   </div>
+                )}
 
-                  {!readOnly && (
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => moveUp(idx)}
-                        className="px-2 py-1 rounded border border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-xs"
-                        title="위로"
-                      >
-                        ▲
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => moveDown(idx)}
-                        className="px-2 py-1 rounded border border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-xs"
-                        title="아래로"
-                      >
-                        ▼
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => remove(s.id)}
-                        className="px-2 py-1 rounded border border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-xs"
-                      >
-                        제거
-                      </button>
+                <Droppable droppableId="pool">
+                  {(provided, snapshot) => (
+                    <div
+                      ref={provided.innerRef}
+                      {...provided.droppableProps}
+                      className={droppableBox(snapshot.isDraggingOver)}
+                    >
+                      {tcLoading ? (
+                        <div className="p-4 text-xs text-slate-400">데이터 로드 중...</div>
+                      ) : (
+                        <div className="p-2 space-y-2">
+                          {pool.map((it, idx) => (
+                            <Draggable key={String(it.id)} draggableId={String(it.id)} index={idx}>
+                              {(p, s) => (
+                                <div
+                                  ref={p.innerRef}
+                                  {...p.draggableProps}
+                                  {...p.dragHandleProps}
+                                  className={poolItemCls(s.isDragging)}
+                                >
+                                  <span className="min-w-0 truncate text-gray-800 dark:text-gray-100">{it.label}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => add(it)}
+                                    className={[
+                                      "flex-none px-2 py-1 rounded-md text-sm",
+                                      "text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/10",
+                                      "opacity-0 group-hover:opacity-100 transition",
+                                    ].join(" ")}
+                                  >
+                                    + 추가
+                                  </button>
+                                </div>
+                              )}
+                            </Draggable>
+                          ))}
+                          {provided.placeholder}
+                          {pool.length === 0 && (
+                            <div className="p-8 text-center text-xs text-slate-400">항목이 없습니다.</div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
-                </li>
-              ))}
-            </ol>
-          </div>
-        </div>
-      </div>
+                </Droppable>
+              </FieldCard>
+            )}
 
-      {!readOnly && <div className="flex items-center justify-end">{footerActions}</div>}
-    </section>
+            {/* 오른쪽: 구성된 순서 */}
+            <div className="flex flex-col">
+              <FieldCard
+                label={
+                  <div className="flex items-center justify-between">
+                    <span>시나리오 구성</span>
+                    {!readOnly && selected.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={clearAll}
+                        className="text-xs font-semibold text-gray-500 hover:text-rose-600"
+                      >
+                        전부 삭제
+                      </button>
+                    )}
+                  </div>
+                }
+                className={panelCls}
+              >
+                <Droppable droppableId="selected">
+                  {(provided, snapshot) => (
+                    <div
+                      ref={provided.innerRef}
+                      {...provided.droppableProps}
+                      className={droppableBox(snapshot.isDraggingOver)}
+                    >
+                      <div className="p-2 space-y-2">
+                        {selected.length === 0 && (
+                          <div className="h-[400px] flex flex-col items-center justify-center p-8 text-center">
+                            <p className="text-xs text-slate-400 leading-relaxed italic">
+                              항목을 드래그하거나 [+] 버튼을 눌러<br/>시나리오 순서를 구성하세요.
+                            </p>
+                          </div>
+                        )}
+                        {selected.map((s, idx) => (
+                          <Draggable key={String(s.id)} draggableId={String(s.id)} index={idx} isDragDisabled={readOnly}>
+                            {(p, st) => (
+                              <div
+                                ref={p.innerRef}
+                                {...p.draggableProps}
+                                className={selectedItemCls(st.isDragging)}
+                              >
+                                <div className="flex items-center min-w-0">
+                                  {!readOnly && (
+                                    <div {...p.dragHandleProps} className="text-slate-500 mr-3 select-none text-[11px]">
+                                      ::
+                                    </div>
+                                  )}
+                                  <span className="text-xs font-bold text-blue-500 w-4">{idx + 1}</span>
+
+                                  <span className="min-w-0 truncate text-gray-900 dark:text-gray-100">
+                                    {s.label}
+                                  </span>
+                                </div>
+                                {!readOnly && (
+                                  <button
+                                    onClick={() => remove(s.id)}
+                                    className={[
+                                      "flex-none px-2 py-1 rounded-md text-sm",
+                                      "text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20",
+                                      "opacity-0 group-hover:opacity-100 transition",
+                                    ].join(" ")}
+                                  >
+                                    &times; 삭제
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </Draggable>
+                        ))}
+                        {provided.placeholder}
+                      </div>
+                    </div>
+                  )}
+                </Droppable>
+              </FieldCard>
+            </div>
+
+          </DragDropContext>
+        </div>
+      </section>
+
+      {/* 하단 액션 */}
+      {!readOnly && footerActions && (
+        <div className="flex justify-end">{footerActions}</div>
+      )}
+    </div>
   );
 }
