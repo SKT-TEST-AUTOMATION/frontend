@@ -134,7 +134,7 @@ export default function TestCaseStepTab({
         meta={workbook}
         excelEditorRef={excelEditorRef}
         uploadSheets={uploadSheetsToServer}
-        startFromTemplate={() => startWithTemplateWorkbook}
+        startFromTemplate={startWithTemplateWorkbook}
         dragOver={dragOver}
         isDropDisabled={isDropDisabled}
         onDrop={onDrop}
